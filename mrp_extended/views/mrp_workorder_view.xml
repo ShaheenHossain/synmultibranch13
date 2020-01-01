@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="mrp_workorder_view_form_inherit_workorder1" model="ir.ui.view">
+        <field name="name">mrp.workorder.view.form.inherit.workorder1</field>
+        <field name="model">mrp.workorder</field>
+        <field name="inherit_id" ref="mrp_workorder.mrp_workorder_view_form_inherit_workorder"/>
+        <field name="arch" type="xml">
+            <button name="open_tablet_view" position="after">
+                <field name="reworkorder_id" invisible="1"/>
+                <field name="is_reworkorder" invisible="1"/>
+                <button name="%(mrp_extended.mrp_workorder_import_xls_result_action)d" type="action" icon="fa-file-excel-o" string="Import Test Result" class="btn-success" attrs="{'invisible': [('is_reworkorder', '=', True)]}" help="Import test result excel sheet."/>
+                <button name="button_show_reworkorder" type="object" string="Rework Order" icon="fa-bars" class="btn-primary" attrs="{'invisible': ['|', ('is_reworkorder', '!=', False), ('reworkorder_id', '=', False)]}"/>
+            </button>
+        </field>
+    </record>
+
+    <record model="ir.ui.view" id="mrp_workorder_view_form_tablet_ext">
+        <field name="name">mrp.workorder.rework.ext</field>
+        <field name="model">mrp.workorder</field>
+        <field name="inherit_id" ref="mrp_workorder.mrp_workorder_view_form_tablet"/>
+        <field name="arch" type="xml">
+            <button name="action_next" position="before">
+                <field name="has_rework" invisible="1"/>
+                <field name="is_reworkorder" invisible="1"/>
+                <field name="reworkorder_id" invisible="1"/>
+                <button name="%(mrp_extended.mrp_workorder_import_xls_result_action)d" type="action" icon="fa-file-excel-o" class="btn-success" attrs="{'invisible': [('is_reworkorder', '=', True)]}" help="Import test result excel sheet."/>
+                <button name="do_rework" type="object" string="Send to Rework" icon="fa-repeat" class="btn-primary" attrs="{'invisible': ['|', '|', '|', ('component_tracking', '!=', 'serial'), ('has_rework', '!=', False), ('is_reworkorder', '!=', False), ('state', 'in', ('cancel', 'done'))]}"/><!-- barcode_trigger="cloWO"-->
+                <!-- <button name="button_show_reworkorder" type="object" string="Rework Order" icon="fa-bars" class="btn-primary" attrs="{'invisible': ['|', ('is_reworkorder', '!=', False), ('reworkorder_id', '=', False)]}"/> --><!-- barcode_trigger="cloWO"-->
+            </button>
+            <field name="finished_lot_id" position="attributes">
+                <attribute name="options">{'no_create': True}</attribute>
+                <attribute name="context">{'default_product_id': product_id, 'default_company_id': company_id, 'workorder_id': active_id, 'is_finished_lot_id': True}</attribute>
+            </field>
+            <xpath expr="//div[hasclass('o_workorder_lot')]//field[@name='lot_id']" position="attributes">
+                <!-- <attribute name="widget">many2one_barcode</attribute>
+                <attribute name="force_save">1</attribute> -->
+                <attribute name="context">{'default_product_id': component_id, 'default_company_id': company_id, 'active_mo_id': test_type == 'register_consumed_materials' and production_id or False, 'workorder_id': active_id}</attribute>
+                <attribute name="options">{'no_create': True}</attribute>
+                <!-- <attribute name="autofocus">autofocus</attribute> -->
+            </xpath>
+            <xpath expr="//div[hasclass('o_workorder_field')]" position="after">
+                <div attrs="{'invisible': [ ('has_rework', '!=', True)]}">
+                    <h1><span class="badge badge-pill badge-danger">In Rework</span></h1>
+                </div>
+            </xpath>
+            <!-- <field name="finished_product_check_ids" position="before">
+                <field name="origin_wo_ids"/>
+            </field> -->
+            <xpath expr="//div[hasclass('o_workorder_data')]" position="after">
+                <notebook>
+                    <page string="Finished Rework" attrs="{'invisible': ['|', ('is_reworkorder', '=', False), ('finished_reworkorder_line_ids', '=', [])]}">
+                        <field name="finished_reworkorder_line_ids" options="{'no_open': True}" readonly="1">
+                            <tree decoration-success="move_line_id == False" decoration-danger="move_line_id != False">
+                                <field name="product_id"/>
+                                <field name="product_uom_id" groups="uom.group_uom" readonly="1"/>
+                                <field name="product_tracking" invisible="1"/>
+                                <field name="company_id" invisible="1"/>
+                                <field name="lot_id" readonly="1"/>
+                                <field name="qty_to_consume" readonly="1" string="To Rework"/>
+                                <field name="qty_done" string="Reworked"/>
+                                <field name="product_uom_id" invisible="1"/>
+                                <field name="move_line_id" invisible="1"/>
+                            </tree>
+                        </field>
+                    </page>
+                    <page string="Finished Products" attrs="{'invisible': ['|', ('is_reworkorder', '!=', False), ('finished_workorder_line_ids', '=', [])]}">
+                        <field name="finished_workorder_line_ids" options="{'no_open': True}" readonly="1">
+                            <!-- to save those values updated in _onchange_qty_producing -->
+                            <tree editable="bottom">
+                                <field name="company_id" invisible="1"/>
+                                <field name="qty_done"/>
+                                <field name="qty_reserved"/>
+                                <field name="qty_to_consume"/>
+                                <field name="product_id"/>
+                                <field name="product_uom_id"/>
+                                <field name="move_id"/>
+                            </tree>
+                        </field>
+                    </page>
+                    <page string="To Rework" attrs="{'invisible': ['|', ('is_reworkorder', '!=', False), ('to_reworkorder_line_ids', '=', [])]}">
+                        <field name="to_reworkorder_line_ids" options="{'no_open': True}" readonly="1">
+                            <tree decoration-success="move_line_id == False" decoration-danger="move_line_id != False">
+                                <field name="product_id"/>
+                                <field name="product_uom_id" groups="uom.group_uom" readonly="1"/>
+                                <field name="product_tracking" invisible="1"/>
+                                <field name="company_id" invisible="1"/>
+                                <field name="lot_id" readonly="1"/>
+                                <field name="qty_to_consume" readonly="1" string="To Rework"/>
+                                <!-- <field name="qty_done" string="Reworked"/> -->
+                                <field name="product_uom_id" invisible="1"/>
+                                <field name="move_line_id" invisible="1"/>
+                            </tree>
+                        </field>
+                    </page>
+                </notebook>
+                <!-- <div class="o_workorder_info">
+                </div> -->
+            </xpath>
+         </field>
+    </record>
+
+    <record model="ir.ui.view" id="mrp_workorder_form_ext_test">
+        <field name="name">mrp.workorder.form.ext.test</field>
+        <field name="model">mrp.workorder</field>
+        <field name="inherit_id" ref="mrp.mrp_production_workorder_form_view_inherit"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='workorder_page_misc']" position="before">
+                <page name="test_result" string="Test Result">
+                    <group name="test_result" string="Test Results">
+                        <group>
+                            <field name="sta" readonly="1"/>
+                            <field name="crp" readonly="1"/>
+                            <field name="votage_test" readonly="1"/>
+                            <field name="result" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="last_test_import_date" readonly="1"/>
+                            <field name="last_test_import_user" readonly="1"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+         </field>
+    </record>
+</odoo>

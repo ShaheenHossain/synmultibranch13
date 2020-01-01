@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.mrp.inherit</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="mrp.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@id='quality_control']" position="before">
+                <div class="col-12 col-lg-6 o_setting_box" title="*Action*.">
+                    <div class="o_setting_left_pane"/>
+                    <div class="o_setting_right_pane">
+                        <label for="mrp_rework_orders_action"/>
+                        <div class="text-muted">
+                            Automatically create a rework order when plan the manufacturing order if Automatic selected else create when products send to rework from work orders.
+                        </div>
+                        <div class="mt8">
+                            <field name="mrp_rework_orders_action" class="o_light_label" widget="radio" required="True"/>
+                        </div>
+                        <div class="row mt16">
+                            <label for="reworkcenter_id" class="col-lg-4 o_light_label"/>
+                            <field name="reworkcenter_id" class="oe_inline" options="{'no_create': True}"/>
+                        </div>
+                    </div>
+                </div>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

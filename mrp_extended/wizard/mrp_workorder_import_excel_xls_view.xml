@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="mrp_workorder_import_xls_result_form_view" model="ir.ui.view">
+        <field name="name">mrp.workorder.import.xls_result.form.view</field>
+        <field name="model">mrp.workorder.import.xls_result</field>
+        <field name="arch" type="xml">
+            <form string="Import Test Result">
+                <div class="oe_clear">
+                    <group>
+                        <group>
+                            <field name="file"/>
+                        </group>
+                    </group>
+                </div>
+                <footer>
+                    <button name="process_import_test_result" type="object" string="Import File" class="oe_highlight"/>
+                    <button string="Cancel" special="cancel" class="btn btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="mrp_workorder_import_xls_result_action" model="ir.actions.act_window">
+        <field name="name">Mrp Workorder Import Excel Result</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">mrp.workorder.import.xls_result</field>
+        <field name="target">new</field>
+        <field name="view_mode">form</field>
+    </record>
+</odoo>

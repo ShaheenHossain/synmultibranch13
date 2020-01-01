@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="rework_station" model="mrp.workcenter">
+            <field name="name">Rework Station</field>
+            <field name="resource_calendar_id" ref="resource.resource_calendar_std"/>
+            <field name="time_efficiency">100</field>
+            <field name="capacity">1</field>
+            <field name="oee_target">90</field>
+            <field name="sequence">99</field>
+        </record>
+    </data>
+</odoo>
