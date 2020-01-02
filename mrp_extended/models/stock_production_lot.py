@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
-from odoo import models, api, _
-from odoo.exceptions import UserError
+from odoo import models, api
 
 
 class StockProductionLot(models.Model):
@@ -32,11 +31,10 @@ class StockProductionLot(models.Model):
                 else:
                     args += [('id', 'in', [])]
             else:
-                origin_wo = self.env['mrp.workorder'].search([
-                    ('reworkorder_id', '=', workorder_id.id), ('production_id', '=', workorder_id.production_id.id)
-                ])
-                if origin_wo:
-                    to_reworkorder_line_ids = workorder_id._defaults_from_to_reworkorder_line().filtered(lambda rewol: rewol.move_line_id and rewol.lot_id)
+                to_reworkorder_line_ids = workorder_id._defaults_from_to_reworkorder_line().filtered(
+                        lambda rewol: rewol.lot_id and rewol.rework_state == "pending"
+                    )
+                if to_reworkorder_line_ids:
                     if to_reworkorder_line_ids:
                         args += [('id', 'in', to_reworkorder_line_ids.mapped('lot_id').ids)]
                 else:

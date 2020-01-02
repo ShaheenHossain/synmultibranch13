@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 # Part of Odoo. See COPYRIGHT & LICENSE files for full copyright and licensing details.
 
-from datetime import datetime, timedelta
 from odoo.tools import float_compare, float_round
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, Warning
@@ -9,6 +8,26 @@ from odoo.exceptions import UserError, Warning
 
 class MrpWorkorder(models.Model):
     _inherit = "mrp.workorder"
+
+    @api.depends(
+        'current_quality_check_id',
+        'to_reworkorder_line_ids',
+        'to_reworkorder_line_ids.move_line_id',
+        'to_reworkorder_line_ids.rework_state',
+        'lot_id',
+        'finished_lot_id'
+    )
+    def _check_has_rework(self):
+        for wo in self:
+            if wo.current_quality_check_id and\
+                wo.current_quality_check_id.workorder_line_id and\
+                wo.current_quality_check_id.workorder_line_id.move_line_id and \
+                wo.current_quality_check_id.workorder_line_id.move_line_id.id in wo.to_reworkorder_line_ids.mapped('move_line_id').ids:
+                wo.has_rework = True
+            elif wo.production_id.workorder_ids.to_reworkorder_line_ids._origin.filtered(lambda rewol: wo.finished_lot_id and wo.finished_lot_id.id == rewol.lot_id.id and rewol.rework_state != "done"):
+                wo.has_rework = True
+            else:
+                wo.has_rework = False
 
     is_reworkorder = fields.Boolean("Is Rework Order",
                                      help="Check if workorder is rework order or not.")
@@ -18,16 +37,14 @@ class MrpWorkorder(models.Model):
         'orig_rewo_id', string='To Rework')
     finished_reworkorder_line_ids = fields.One2many('mrp.workorder.line',
         'finished_reworkorder_id', string='finished Re-Workorder Lines')
-
-    has_rework = fields.Boolean(compute='_check_has_rework', store=True)
-
-    @api.depends('current_quality_check_id', 'to_reworkorder_line_ids', 'to_reworkorder_line_ids.move_line_id', 'lot_id')
-    def _check_has_rework(self):
-        for wo in self:
-            if wo.current_quality_check_id.workorder_line_id.move_line_id.id in wo.to_reworkorder_line_ids.mapped('move_line_id').ids:
-                wo.has_rework = True
-            else:
-                wo.has_rework = False
+    has_rework = fields.Boolean(compute='_check_has_rework', store=True,
+        help="Technical field to track SN has rework or not.")
+    excel_test_result_ids = fields.One2many('mrp.workorder.excel_test_result',
+        'workorder_id', string='Test Results', readonly=True)
+    last_test_import_date = fields.Date("Last Test Import Date", readonly=True)
+    last_test_import_user = fields.Many2one("res.users", "Last Test Import User", readonly=True)
+    orig_move_line_id = fields.Many2one('stock.move.line', string="Move Line",
+        help="Technical field to track related move of rework order line.")
 
     @api.depends('production_id.workorder_ids')
     def _compute_is_last_unfinished_wo(self):
@@ -45,24 +62,8 @@ class MrpWorkorder(models.Model):
             wo.qty_remaining = float_round(wo.qty_production - wo.qty_produced, precision_rounding=wo.production_id.product_uom_id.rounding)
         for rewo in self.filtered(lambda reworkorder: reworkorder.is_reworkorder):
             reworkorder_lines = rewo._defaults_from_to_reworkorder_line()
-            qty_to_consume = len(reworkorder_lines.filtered(lambda rewol: rewol.move_line_id))
+            qty_to_consume = len(reworkorder_lines.filtered(lambda rewol: rewol.rework_state == "pending"))
             rewo.qty_remaining = float_round(qty_to_consume or 1, precision_rounding=rewo.production_id.product_uom_id.rounding)
-
-    sta = fields.Selection([("pass", "Pass"),
-                            ("fail", "Fail")],
-                           string="STA", help="STA Test Result")
-    crp = fields.Selection([("pass", "Pass"),
-                            ("fail", "Fail")],
-                           string="CRP", help="CRP Test Result")
-    votage_test = fields.Selection([("pass", "Pass"),
-                                    ("fail", "Fail")],
-                                   string="Votage Test", help="Votage Test Result")
-    result = fields.Selection([("pass", "Pass"),
-                               ("fail", "Fail")],
-                              string="Result", help="Test Result")
-    last_test_import_date = fields.Date("Last Test Import Date")
-    last_test_import_user = fields.Many2one("res.users", "Last Test Import User")
-    orig_move_line_id = fields.Many2one('stock.move.line')
 
     @api.model
     def _search(self, args, offset=0, limit=None, order=None, count=False, access_rights_uid=None):
@@ -72,6 +73,17 @@ class MrpWorkorder(models.Model):
                 if args[index][0] == "next_work_order_id" and isinstance(args[index][2], int) and args[index][2] == context['reworkorder_id']:
                     args[index] = ("reworkorder_id", args[index][1], args[index][2])
         return super(MrpWorkorder, self)._search(args, offset, limit, order, count=count, access_rights_uid=access_rights_uid)
+
+    def _get_previously_finished_lots(self):
+        self.ensure_one()
+        Lots = self.env['stock.production.lot']
+        if self.product_tracking != 'none':
+            previous_wo = self.env['mrp.workorder'].search([
+                ('next_work_order_id', '=', self.id)
+            ])
+            if previous_wo:
+                Lots |= previous_wo.finished_workorder_line_ids.mapped('lot_id')
+        return Lots
 
     def _defaults_from_to_reworkorder_line(self):
         self.ensure_one()
@@ -96,14 +108,14 @@ class MrpWorkorder(models.Model):
             rounding = self.product_uom_id.rounding
             if not candidates:
                 self.write({
-                    'finished_lot_id': r_line.lot_id.id,
+                    'finished_lot_id': False,
                     'qty_producing': r_line.qty_done,
                     'orig_move_line_id': r_line.move_line_id.id,
                 })
                 return True
             elif float_compare(candidates.qty_done, r_line.qty_done, precision_rounding=rounding) < 0:
                 self.write({
-                    'finished_lot_id': r_line.lot_id.id,
+                    'finished_lot_id': False,
                     'qty_producing': r_line.qty_done - candidates.qty_done,
                     'orig_move_line_id': r_line.move_line_id.id,
                 })
@@ -212,6 +224,10 @@ class MrpWorkorder(models.Model):
 
     def do_rework(self):
         self.ensure_one()
+        if self.component_tracking == "serial" and not self.lot_id:
+            raise UserError(_("Please enter a serial number for component!."))
+        if not self.current_quality_check_id and self.product_tracking == "serial" and not self.finished_lot_id:
+            raise UserError(_("Please enter a serial number for product!."))
         mrp_rework_orders_action = self.env["ir.config_parameter"].sudo().get_param("mrp_extended.mrp_rework_orders_action")
         default_reworkcenter_id = self.env["ir.config_parameter"].sudo().get_param("mrp_extended.default_reworkcenter_id")
         self.reworkorder_id = self.production_id.workorder_ids.filtered(
@@ -227,18 +243,26 @@ class MrpWorkorder(models.Model):
         })
 
         check_id = self.current_quality_check_id
-        self._assign_component_lot_to_finish_lot()
-        self.raw_workorder_line_ids = [(1, line.id, {
-                'raw_workorder_id': False,
-                'orig_rewo_id': self.id,
-                'qty_done': 1,
-                'company_id': line._get_production().company_id.id,
-                'lot_id': self.finished_lot_id,
-            }) for line in self.raw_workorder_line_ids]
-
-        check_id.unlink()
-
-        reworkorder_lines = self.reworkorder_id._defaults_from_to_reworkorder_line().filtered(lambda rewol: rewol.move_line_id)
+        if check_id and self.component_tracking == "serial" and self.product_tracking == "serial":
+            self._assign_component_lot_to_finish_lot()
+            self.raw_workorder_line_ids = [(1, line.id, {
+                    'raw_workorder_id': False,
+                    'orig_rewo_id': self.id,
+                    'qty_done': 1,
+                    'company_id': line._get_production().company_id.id,
+                    'lot_id': self.finished_lot_id,
+                }) for line in self.raw_workorder_line_ids]
+            reworkorder_lines = self.reworkorder_id._defaults_from_to_reworkorder_line().filtered(lambda rewol: rewol.move_line_id)
+            check_id.unlink()
+        elif not self.component_tracking and self.product_tracking == "serial":
+            self.env['mrp.workorder.line'].create({
+                    'product_id': self.product_id.id,
+                    'product_uom_id': self.product_id.uom_id.id,
+                    'orig_rewo_id': self.id,
+                    'qty_done': 1,
+                    'lot_id': self.finished_lot_id.id,
+                })
+            reworkorder_lines = self.reworkorder_id._defaults_from_to_reworkorder_line()
         # reference_lot_lines = self.to_reworkorder_line_ids.filtered(lambda rewol: rewol.move_line_id)
         self.reworkorder_id._defaults_from_finished_workorder_line(reworkorder_lines.sorted(key=lambda rewol: rewol.create_date, reverse=True))
         self.reworkorder_id._create_checks()
@@ -261,11 +285,11 @@ class MrpWorkorder(models.Model):
         else:
             current_lot_lines.qty_done += self.qty_producing
 
-    # def _defaults_from_workorder_lines(self, move, test_type):
-    #     line = super(MrpWorkorder, self)._defaults_from_workorder_lines(move, test_type)
-    #     if line.get('lot_id', False):
-    #         line.pop('lot_id')
-    #     return line
+    def _defaults_from_workorder_lines(self, move, test_type):
+        line = super(MrpWorkorder, self)._defaults_from_workorder_lines(move, test_type)
+        if line.get('lot_id', False):
+            line.pop('lot_id')
+        return line
 
     def record_rework_production(self):
         if not self:
@@ -275,15 +299,18 @@ class MrpWorkorder(models.Model):
         prev_orig_move_line_id = self.orig_move_line_id
         prev_lot_id = self.finished_lot_id
         self._check_company()
+
+        if self.product_tracking and self.product_tracking == "serial" and not self.finished_lot_id:
+            raise UserError(_('You have to enter a serial number for product!'))
+
+        if self.product_tracking and self.product_tracking == "serial" and self.finished_lot_id:
+            related_rewol = self.production_id.workorder_ids.mapped('to_reworkorder_line_ids').filtered(
+                    lambda rewol: self.finished_lot_id.id == rewol.lot_id.id and rewol.rework_state == "pending"
+                )
+            if not related_rewol:
+                raise UserError(_('Serial number %s not available for rework!') % (self.finished_lot_id.name))
         if float_compare(self.qty_producing, 0, precision_rounding=self.product_uom_id.rounding) <= 0:
             raise UserError(_('Please set the quantity you are currently producing. It should be different from zero.'))
-
-        # If last work order, then post lots used
-        # if not self.next_work_order_id:
-        #     self._update_finished_move()
-
-        # Transfer quantities from temporary to final move line or make them final
-        # self._update_moves()
 
         # Transfer lot (if present) and quantity produced to a finished workorder line
         if self.product_tracking != 'none':
@@ -301,13 +328,15 @@ class MrpWorkorder(models.Model):
 
         # One a piece is produced, you can launch the next work order
         # self._start_nextworkorder()
+        to_reworkorder_line_ids = self.production_id.workorder_ids.mapped('to_reworkorder_line_ids')
+        rewol_to_update = to_reworkorder_line_ids.filtered(lambda rewol: rewol.lot_id.id == prev_lot_id.id)
         if prev_orig_move_line_id and prev_lot_id:
-            to_reworkorder_line_ids = self.production_id.workorder_ids.mapped('to_reworkorder_line_ids')
-            rewol_to_update = to_reworkorder_line_ids.filtered(lambda rewol: rewol.lot_id.id == prev_lot_id.id)
             rewol_to_update.write({
-                    'move_line_id': False
+                    'move_line_id': False,
+                    'rework_state': "done",
                 })
-
+        else:
+            rewol_to_update.write({'rework_state': "done",})
         # Test if the production is done
         rounding = self.production_id.product_uom_id.rounding
         # Get to rework lines length
@@ -339,6 +368,10 @@ class MrpWorkorder(models.Model):
     def record_production(self):
         finished_lot_id = self.finished_lot_id
         prev_orig_move_line_id = self.orig_move_line_id
+
+        if not self.is_reworkorder and self.has_rework and not self.component_tracking:
+            raise UserError(_("Rework of this product is currently in progress!"))
+
         if self.is_reworkorder:
             self = self.with_context(reworkorder_id=self.id)
             res = self.record_rework_production()
@@ -353,13 +386,15 @@ class MrpWorkorder(models.Model):
         return res
 
     def button_start(self):
-        if self.is_reworkorder and not self.orig_move_line_id:
+        if self.is_reworkorder and not self._defaults_from_to_reworkorder_line().filtered(
+                        lambda rewol: rewol.lot_id and rewol.rework_state == "pending"
+                    ):
             raise Warning(_("No quantities available for rework."))
         return super(MrpWorkorder, self).button_start()
 
     def _assign_component_lot_to_finish_lot(self):
         self.ensure_one()
-        if self.component_tracking != 'none' and self.lot_id and self.qty_done != 0:
+        if self.component_tracking == "serial" and self.lot_id and self.qty_done != 0:
             if not self.finished_lot_id:
                 # Try search if available then no need to create
                 candidate_lot = self.env['stock.production.lot'].search([
@@ -384,13 +419,14 @@ class MrpWorkorder(models.Model):
         prev_quality_check_id = self.current_quality_check_id
         if self.has_rework:
             raise UserError(_("Rework of this component is currently in progress!"))
-        self._assign_component_lot_to_finish_lot()
+        if self.product_tracking and self.product_tracking == "serial":
+            self._assign_component_lot_to_finish_lot()
         super(MrpWorkorder, self)._next(continue_production=continue_production)
         if self.is_user_working or self.is_last_step or not self.skipped_check_ids or not self.is_last_lot:
             auto_record = True
             if prev_quality_check_id and prev_quality_check_id.point_id:
                 auto_record = False
-        if auto_record:
+        if auto_record and not continue_production:
             self.record_production()
 
     def button_show_reworkorder(self):
@@ -416,6 +452,7 @@ class MrpWorkorder(models.Model):
 
     def on_barcode_scanned(self, barcode):
         # qty_done field for serial numbers is fixed
+
         if self.component_tracking != 'serial':
             if not self.lot_id:
                 # not scanned yet
@@ -430,54 +467,109 @@ class MrpWorkorder(models.Model):
                     }
                 }
 
-        lot = self.env['stock.production.lot'].search([('name', '=', barcode), ('product_id', '=', self.component_id.id)])
-
-        corresponding_rework_move_line = self.to_reworkorder_line_ids.mapped('move_line_id').filtered(
-                lambda ml: lot and ml.lot_id.id == lot.id
-            )
-
-        if corresponding_rework_move_line:
-            return {
-                'warning': {
-                    'title': _("Warning"),
-                    'message': _("Corresponding product %s of barcode %s is currently in rework!\
-                        You can only process once it will be processed from rework station." % (
-                            corresponding_rework_move_line.product_id.display_name,
-                            corresponding_rework_move_line.lot_id.name,
-                        ))
-                }
-            }
-
         if self.component_tracking:
-            if not lot:
-                # create a new lot
-                # create in an onchange is necessary here ("new" cannot work here)
-                lot = self.env['stock.production.lot'].create({
-                    'name': barcode,
-                    'product_id': self.component_id.id,
-                    'company_id': self.company_id.id,
-                })
-            self.lot_id = lot
+            lot = self.env['stock.production.lot'].search([('name', '=', barcode), ('product_id', '=', self.component_id.id)])
+            if lot:
+                # Check is corresponding lot is reserved for production or not
+                reserved_lots = self.move_line_ids.filtered(
+                    lambda ml: ml.product_id.id == self.component_id.id
+                ).mapped('lot_id')
+
+                if reserved_lots and (lot.id not in reserved_lots.ids):
+                    return {
+                        'warning': {
+                            'title': _("Warning"),
+                            'message': _("Corresponding product %s of barcode %s is not reserved for current production!" % (
+                                    self.component_id.display_name,
+                                    barcode,
+                                ))
+                        }
+                    }
+
+                # Check is corresponding lot is currently in rework or not
+                corresponding_rework_move_line = self.to_reworkorder_line_ids.mapped('move_line_id').filtered(
+                        lambda ml: lot and ml.lot_id.id == lot.id
+                    )
+
+                if corresponding_rework_move_line:
+                    return {
+                        'warning': {
+                            'title': _("Warning"),
+                            'message': _("Corresponding product %s of barcode %s is currently in rework!\
+                                You can only process once it will be processed from rework station." % (
+                                    corresponding_rework_move_line.product_id.display_name,
+                                    barcode,
+                                ))
+                        }
+                    }
+
+                self.lot_id = lot
+            else:
+                return {
+                    'warning': {
+                        'title': _("Warning"),
+                        'message': _("No corresponding lot found for component %s." % (
+                                self.component_id.display_name
+                            ))
+                    }
+                }
         elif self.production_id.product_id.tracking and self.production_id.product_id.tracking != 'none':
-            if not lot:
-                lot = self.env['stock.production.lot'].create({
-                    'name': barcode,
-                    'product_id': self.product_id.id,
-                    'company_id': self.company_id.id,
-                })
-            self.finished_lot_id = lot
+            lot = self.env['stock.production.lot'].search([('name', '=', barcode), ('product_id', '=', self.product_id.id)])
+            if lot:
+                if not self.is_reworkorder:
+                    previously_finished_lots = self._get_previously_finished_lots()
+                    if previously_finished_lots and not (lot.id in previously_finished_lots.ids):
+                        return {
+                            'warning': {
+                                'title': _("Warning"),
+                                'message': _("Corresponding product %s of barcode %s is not finished yet in previous workorder %s!" % (
+                                        self.product_id.display_name,
+                                        barcode,
+                                        previous_wo.display_name
+                                    )
+                                )
+                            }
+                        }
+                else:
+                    reworkorder_lines = self._origin._defaults_from_to_reworkorder_line()
+                    if lot.id not in reworkorder_lines.mapped('lot_id').ids:
+                        return {
+                            'warning': {
+                                'title': _("Warning"),
+                                'message': _("Corresponding product %s of barcode %s is not available for rework!" % (
+                                        self.product_id.display_name,
+                                        barcode,
+                                    )
+                                )
+                            }
+                        }
+                self.finished_lot_id = lot
+            else:
+                return {
+                    'warning': {
+                        'title': _("Warning"),
+                        'message': _("No corresponding lot found for product %s." % (
+                                self.product_id.display_name
+                            ))
+                    }
+                }
 
 class MrpWorkorderLine(models.Model):
     _inherit = 'mrp.workorder.line'
 
+    rework_state = fields.Selection([
+        ('pending', "To Rework"),
+        ('done', "Done")], string="Rework Status", default="pending")
     orig_rewo_id = fields.Many2one('mrp.workorder', 'Origin Product for Re-Workorder',
         ondelete='cascade')
-    finished_reworkorder_id = fields.Many2one('mrp.workorder', 'Origin Product for Re-Workorder',
+    finished_reworkorder_id = fields.Many2one('mrp.workorder', 'Finished Re-Workorder',
         ondelete='cascade')
-    move_line_id = fields.Many2one('stock.move.line')
+    move_line_id = fields.Many2one('stock.move.line', string="Related Move Line")
 
     def _get_production(self):
         production_id = super(MrpWorkorderLine, self)._get_production()
         if not production_id and self.finished_reworkorder_id:
             production_id = self.finished_reworkorder_id.production_id
+        elif not production_id and self.orig_rewo_id:
+            production_id = self.orig_rewo_id.production_id
         return production_id
