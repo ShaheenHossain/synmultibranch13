@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <template id="mrp_extended_assets_backend" name="mrp extended assets_backend" inherit_id="web.assets_backend">
+        <xpath expr="." position="inside">
+            <link rel="stylesheet" type="text/scss" href="/mrp_extended/static/src/scss/tablet_view.scss"/>
+        </xpath>
+    </template>
+</odoo>

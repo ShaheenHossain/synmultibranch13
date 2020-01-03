@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <data noupdate="0">
+    <data noupdate="1">
         <record model="ir.rule" id="mrp_workorder_team_rule_administrator">
             <field name="name">MRP Workcenter: Manager</field>
             <field name="model_id" ref="mrp.model_mrp_workcenter"/>

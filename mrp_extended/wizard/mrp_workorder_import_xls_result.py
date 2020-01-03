@@ -66,17 +66,18 @@ class MrpWorkorderImportXlsResult(models.TransientModel):
                                     workorder.record_production()
                                 else:
                                     last_qty_to_process = True
+                            # Prepare values to write test results
+                            values.append((0, 0, {
+                                'component_lot_ref': component_lot_ref,
+                                'finish_lot_ref': finish_lot_ref,
+                                'workorder_id': workorder.id,
+                                'sta': sheet.cell(row, 31).value != "P" and "fail" or "pass",
+                                'crp': sheet.cell(row, 32).value != "P" and "fail" or "pass",
+                                'votage_test': sheet.cell(row, 33).value != "P" and "fail" or "pass",
+                                'result': final_result and "pass" or "fail",
+                            }))
                         else:
                             continue
-                values.append((0, 0, {
-                    'component_lot_ref': component_lot_ref,
-                    'finish_lot_ref': finish_lot_ref,
-                    'workorder_id': workorder.id,
-                    'sta': sheet.cell(row, 31).value != "P" and "fail" or "pass",
-                    'crp': sheet.cell(row, 32).value != "P" and "fail" or "pass",
-                    'votage_test': sheet.cell(row, 33).value != "P" and "fail" or "pass",
-                    'result': final_result and "pass" or "fail",
-                }))
         if not format_found:
             raise Warning(_("Invalid File Format or no product SN found in the sheet!"))
 

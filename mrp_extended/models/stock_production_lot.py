@@ -21,13 +21,9 @@ class StockProductionLot(models.Model):
         if self._context.get('workorder_id', False) and self._context.get('is_finished_lot_id', False):
             workorder_id = self.env['mrp.workorder'].browse(self._context.get('workorder_id'))
             if not workorder_id.is_reworkorder:
-                previous_wo = self.env['mrp.workorder'].search([
-                    ('next_work_order_id', '=', self.id)
-                ])
-                if previous_wo:
-                    finished_wo_line_in_previous_wo = workorder_id._defaults_from_finished_workorder_line(previous_wo.finished_workorder_line_ids)
-                    if finished_wo_line_in_previous_wo:
-                        args += [('id', 'in', finished_wo_line_in_previous_wo.mapped('lot_id').ids)]
+                previously_finished_lots = workorder_id._get_previously_finished_lots()
+                if previously_finished_lots:
+                    args += [('id', 'in', previously_finished_lots.ids)]
                 else:
                     args += [('id', 'in', [])]
             else:
