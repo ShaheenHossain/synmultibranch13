@@ -35,10 +35,13 @@ class MrpWorkorder(models.Model):
         for wokorder in self:
             if wokorder.finished_lot_id:
                 prev_wos = wokorder.production_id.workorder_ids.filtered(lambda wo: wo.id < wokorder._origin.id)
+                # get previously done quality check
                 prev_finished_check_ids = prev_wos.check_ids.filtered(
                         lambda check: check.finished_lot_id and check.finished_lot_id.id == wokorder.finished_lot_id.id
                     )
-                wokorder.previously_finished_check_ids = [(6, 0, prev_finished_check_ids.ids)]
+                # get currently done quality check
+                current_check_ids = wokorder.check_ids.filtered(lambda c: c.finished_product_sequence == wokorder.qty_produced)
+                wokorder.previously_finished_check_ids = [(6, 0, (prev_finished_check_ids + current_check_ids).ids)]
             else:
                 wokorder.previously_finished_check_ids = []
 

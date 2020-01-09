@@ -57,8 +57,9 @@
                     <h2><span class="badge badge-pill badge-danger">In Rework</span></h2>
                 </div>
             </xpath>
+            <field name="finished_product_check_ids" position="replace"/>
             <xpath expr="//div[hasclass('o_workorder_data')]" position="inside">
-                <field name="previously_finished_check_ids" attrs="{'invisible': ['|', ('current_quality_check_id', '=', False), ('previously_finished_check_ids', '=', [])]}">
+                <field name="previously_finished_check_ids" attrs="{'invisible': [('previously_finished_check_ids', '=', [])]}">
                     <tree decoration-success="quality_state == 'pass'" decoration-danger="quality_state == 'fail'" default_order="control_date">
                         <field name="quality_state" invisible="1"/>
                         <field name="test_type" invisible="1"/>
