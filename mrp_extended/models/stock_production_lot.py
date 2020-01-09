@@ -12,12 +12,11 @@ class StockProductionLot(models.Model):
         if self._context.get('workorder_id', False) and not self._context.get('is_finished_lot_id', False):
             workorder_id = self.env['mrp.workorder'].browse(self._context.get('workorder_id'))
             if not workorder_id.is_reworkorder and workorder_id.component_id and workorder_id.component_id.tracking != "none":
-                reserved_lots = workorder_id.move_line_ids.filtered(
-                        lambda ml: ml.product_id.id == workorder_id.component_id.id
-                    ).mapped('lot_id')
-                lots_to_rework = workorder_id.to_reworkorder_line_ids.mapped('move_line_id').mapped('lot_id')
-                reserved_lots = (reserved_lots - lots_to_rework)
-                args += [('id', 'in', reserved_lots.ids)]
+                unused_component_lots = workorder_id._get_unused_component_lots()
+                if unused_component_lots:
+                    args += [('id', 'in', unused_component_lots.ids)]
+                else:
+                    args += [('id', 'in', [])]
         if self._context.get('workorder_id', False) and self._context.get('is_finished_lot_id', False):
             workorder_id = self.env['mrp.workorder'].browse(self._context.get('workorder_id'))
             if not workorder_id.is_reworkorder:

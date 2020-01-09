@@ -3,7 +3,7 @@
 
 {
     'name': 'MRP Extention',
-    'version': '1.0',
+    'version': '1.1',
     'category': 'MRP',
     'summary': 'MRP Extention',
     'description': """
@@ -16,7 +16,6 @@
         'security/ir.model.access.csv',
         'security/mrp_security.xml',
         'data/mrp_workorder_data.xml',
-        'views/assets_backend.xml',
         'views/mrp_team_view.xml',
         'views/mrp_workcenter_view.xml',
         'wizard/mrp_workorder_import_excel_xls_view.xml',

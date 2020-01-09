@@ -24,4 +24,5 @@ class MrpWorkorderExcelTestResult(models.Model):
     finish_lot_ref = fields.Char(string='Product No.')
     user_id = fields.Many2one('res.users', 'Responsible', default=lambda self: self.env.user, readonly=True)
     workorder_id = fields.Many2one('mrp.workorder', 'Workorder', ondelete='cascade')
+    quality_check_id = fields.Many2one('quality.check', 'Quality')
 
