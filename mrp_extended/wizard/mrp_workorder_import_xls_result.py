@@ -27,6 +27,10 @@ class MrpWorkorderImportXlsResult(models.TransientModel):
         except Exception as e:
             raise Warning(_(e))
 
+        # Start the WO if not in progress
+        if not workorder.is_user_working and workorder.working_state != 'blocked':
+            workorder.button_start()
+
         values = list()
         # ensure one 'last_qty_to_process'
         last_qty_to_process = False
