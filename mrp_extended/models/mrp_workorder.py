@@ -55,6 +55,9 @@ class MrpWorkorder(models.Model):
         'finished_reworkorder_id', string='finished Re-Workorder Lines')
     previously_finished_check_ids = fields.Many2many('quality.check',
         compute='_get_previously_finished_steps', string='Previously Processed Steps')
+    created_finished_lot_ids = fields.Many2many('stock.production.lot',
+        string='Created Finish Product Lots/SN',
+        help="Technical field to store created lots use to delete in case of MO will cancel.")
     has_rework = fields.Boolean(compute='_check_has_rework', store=True,
         help="Technical field to track SN has rework or not.")
     excel_test_result_ids = fields.One2many('mrp.workorder.excel_test_result',
@@ -443,11 +446,15 @@ class MrpWorkorder(models.Model):
                 if candidate_lot:
                     self.finished_lot_id = candidate_lot.id
                 else:
-                    self.finished_lot_id = self.env['stock.production.lot'].create({
+                    finished_lot_id = self.env['stock.production.lot'].create({
                             'name': self.lot_id.name,
                             'product_id': self.product_id.id,
                             'company_id': self.company_id.id,
-                        }).id
+                        })
+                    self.write({
+                            'finished_lot_id': finished_lot_id.id,
+                            'created_finished_lot_ids': [(4, finished_lot_id.id)],
+                        })
             else:
                 self.finished_lot_id.write({"name": self.lot_id.name})
         return True

@@ -48,3 +48,16 @@ class MrpProduction(models.Model):
             workorder_to_update.write({'next_work_order_id': False})
         return workorders
 
+    def _action_cancel(self):
+        res = super(MrpProduction, self)._action_cancel()
+        # Remove all the unused created lots to keep available for another MO
+        StockQuant = self.env['stock.quant']
+        lots_to_delete = self.env['stock.production.lot']
+        created_lots = self.workorder_ids.mapped('created_finished_lot_ids')
+        for lot in created_lots:
+            # Ensure that created lot has not quant available
+            quants = StockQuant._gather(self.product_id, self.location_dest_id, lot_id=lot, strict=True)
+            if not quants:
+                lots_to_delete |= lot
+        lots_to_delete.unlink()
+        return res
