@@ -60,8 +60,9 @@ class MrpWorkorderImportXlsResult(models.TransientModel):
                         # do rework/fail
                         final_result = False
                         workorder.do_rework()
-                        if check_id:
-                            workorder.do_fail()
+                        # passed this logic to `do_rework`
+                        # if check_id:
+                        #     workorder.do_fail()
                     elif sheet.cell(row, 34).value == "P":
                         # do process/pass
                         final_result = True

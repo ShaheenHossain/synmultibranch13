@@ -20,12 +20,15 @@ class MrpWorkorder(models.Model):
     )
     def _check_has_rework(self):
         for wo in self:
-            if wo.current_quality_check_id and\
-                wo.current_quality_check_id.workorder_line_id and\
-                wo.current_quality_check_id.workorder_line_id.move_line_id and \
-                wo.current_quality_check_id.workorder_line_id.move_line_id.id in wo.to_reworkorder_line_ids.mapped('move_line_id').ids:
+            reworkorder_lines = wo.production_id.workorder_ids.filtered(
+                    lambda workorder: not workorder.is_reworkorder
+                ).mapped('to_reworkorder_line_ids')
+            if wo.lot_id and wo.lot_id.id in reworkorder_lines.filtered(
+                    lambda rewol: rewol.rework_state != "done"
+                ).mapped('move_line_id').mapped('lot_id').ids:
                 wo.has_rework = True
-            elif wo.production_id.workorder_ids.to_reworkorder_line_ids._origin.filtered(lambda rewol: wo.finished_lot_id and wo.finished_lot_id.id == rewol.lot_id.id and rewol.rework_state != "done"):
+            elif reworkorder_lines.filtered(lambda rewol: wo.finished_lot_id and\
+                wo.finished_lot_id.id == rewol.lot_id.id and rewol.rework_state != "done"):
                 wo.has_rework = True
             else:
                 wo.has_rework = False
@@ -163,13 +166,13 @@ class MrpWorkorder(models.Model):
                 return True
         return False
 
-    def _apply_update_workorder_lines(self):
-        previous_wo = self.env[self._name].search([
-                    ('next_work_order_id', '=', self.id)
-                ])
-        if previous_wo and previous_wo.reworkorder_id:
-            return super(MrpWorkorder, previous_wo.reworkorder_id)._apply_update_workorder_lines()
-        return super(MrpWorkorder, self)._apply_update_workorder_lines()
+    # def _apply_update_workorder_lines(self):
+    #     previous_wo = self.env[self._name].search([
+    #                 ('next_work_order_id', '=', self.id)
+    #             ])
+    #     if previous_wo and previous_wo.reworkorder_id:
+    #         return super(MrpWorkorder, previous_wo.reworkorder_id)._apply_update_workorder_lines()
+    #     return super(MrpWorkorder, self)._apply_update_workorder_lines()
 
     @api.model
     def _generate_lines_values(self, move, qty_to_consume):
@@ -277,7 +280,7 @@ class MrpWorkorder(models.Model):
         })
 
         check_id = self.current_quality_check_id
-        if check_id and self.component_tracking == "serial" and self.product_tracking == "serial":
+        if self.component_tracking == "serial" and self.product_tracking == "serial":
             self._assign_component_lot_to_finish_lot()
             self.raw_workorder_line_ids = [(1, line.id, {
                     'raw_workorder_id': False,
@@ -287,7 +290,6 @@ class MrpWorkorder(models.Model):
                     'lot_id': self.finished_lot_id,
                 }) for line in self.raw_workorder_line_ids]
             reworkorder_lines = self.reworkorder_id._defaults_from_to_reworkorder_line().filtered(lambda rewol: rewol.move_line_id)
-            check_id.unlink()
         elif not self.component_tracking and self.product_tracking == "serial":
             self.env['mrp.workorder.line'].create({
                     'product_id': self.product_id.id,
@@ -297,12 +299,15 @@ class MrpWorkorder(models.Model):
                     'lot_id': self.finished_lot_id.id,
                 })
             reworkorder_lines = self.reworkorder_id._defaults_from_to_reworkorder_line()
+        # quality check must have type `passfail` to `do_fail`
+        if check_id and self.test_type == 'passfail':
+            check_id.do_fail()
+
         # reference_lot_lines = self.to_reworkorder_line_ids.filtered(lambda rewol: rewol.move_line_id)
         self.reworkorder_id._defaults_from_finished_workorder_line(reworkorder_lines.sorted(key=lambda rewol: rewol.create_date, reverse=True))
         self.reworkorder_id._create_checks()
         self._apply_update_workorder_lines()
         self.finished_lot_id = False
-        self._create_checks()
         return True
 
     def _create_or_update_rework_finished_line(self):

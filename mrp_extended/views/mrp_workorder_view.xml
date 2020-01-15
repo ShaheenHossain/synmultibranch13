@@ -9,7 +9,9 @@
             <button name="open_tablet_view" position="after">
                 <field name="reworkorder_id" invisible="1"/>
                 <field name="is_reworkorder" invisible="1"/>
-                <button name="%(mrp_extended.mrp_workorder_import_xls_result_action)d" type="action" icon="fa-file-excel-o" string="Import Test Result" class="btn-success" attrs="{'invisible': ['|', ('is_reworkorder', '=', True), ('state', 'in', ('cancel', 'done'))]}" help="Import test result excel sheet."/>
+                <field name="has_rework" invisible="1"/>
+                <field name="test_type" invisible="1"/>
+                <button name="%(mrp_extended.mrp_workorder_import_xls_result_action)d" type="action" icon="fa-file-excel-o" string="Import Test Result" class="btn-success" attrs="{'invisible': ['|', '|', '|', '|', ('test_type', '!=', 'passfail'), ('product_tracking', '!=', 'serial'), ('has_rework', '!=', False), ('is_reworkorder', '=', True), ('state', 'in', ('cancel', 'done'))]}" help="Import test result excel sheet."/>
                 <button name="button_show_reworkorder" type="object" string="Rework Order" icon="fa-bars" class="btn-primary" attrs="{'invisible': ['|', ('is_reworkorder', '!=', False), ('reworkorder_id', '=', False)]}"/>
             </button>
         </field>
@@ -23,6 +25,7 @@
             <field name="finished_workorder_line_ids" position="after">
                 <field name="has_rework" invisible="1"/>
                 <field name="is_reworkorder" invisible="1"/>
+                <field name="test_type" invisible="1"/>
                 <field name="reworkorder_id" invisible="1"/>
                 <field name="finished_reworkorder_line_ids" invisible="1"/>
                 <field name="finished_workorder_line_ids" invisible="1"/>
@@ -33,7 +36,7 @@
                 <button name="action_info" type="object" class="btn-warning o_workorder_icon_btn" icon="fa-info" attrs="{'invisible': ['|', ('is_reworkorder', '!=', True), ('finished_reworkorder_line_ids', '=', [])]}"/>
             </xpath>
             <button name="action_next" position="before">
-                <button name="%(mrp_extended.mrp_workorder_import_xls_result_action)d" type="action" icon="fa-file-excel-o" class="btn-success" attrs="{'invisible': ['|', '|', '|', ('product_tracking', '!=', 'serial'), ('has_rework', '!=', False), ('is_reworkorder', '=', True), ('state', 'in', ('cancel', 'done'))]}" help="Import test result excel sheet."/>
+                <button name="%(mrp_extended.mrp_workorder_import_xls_result_action)d" type="action" icon="fa-file-excel-o" class="btn-success" attrs="{'invisible': ['|', '|', '|', '|', ('test_type', '!=', 'passfail'), ('product_tracking', '!=', 'serial'), ('has_rework', '!=', False), ('is_reworkorder', '=', True), ('state', 'in', ('cancel', 'done'))]}" help="Import test result excel sheet."/>
                 <button name="do_rework" type="object" string="Send to Rework" icon="fa-repeat" class="btn-primary" attrs="{'invisible': ['|', '|', '|', ('product_tracking', '!=', 'serial'), ('has_rework', '!=', False), ('is_reworkorder', '!=', False), ('state', 'in', ('cancel', 'done'))]}"/><!-- barcode_trigger="cloWO"-->
             </button>
             <field name="finished_lot_id" position="attributes">
