@@ -51,7 +51,7 @@ class MrpWorkorderImportXlsResult(models.TransientModel):
                 previously_finished_lots = workorder._get_previously_finished_lots()
                 # match SN reference with `sheet.cell(row, 2).value`
                 corresponding_lot_id = previously_finished_lots.filtered(lambda lot: lot.name == finish_lot_ref)
-                if not has_component_track and workorder.product_tracking and workorder.product_tracking == "serial" and corresponding_lot_id:
+                if check_id and not has_component_track and workorder.product_tracking == "serial" and corresponding_lot_id:
                     # check if corresponding SN is already processed then bypass it.
                     if corresponding_lot_id in (workorder.finished_workorder_line_ids + workorder.to_reworkorder_line_ids.filtered(lambda rewol: rewol.rework_state != "done")).mapped('lot_id'):
                         continue
@@ -59,18 +59,14 @@ class MrpWorkorderImportXlsResult(models.TransientModel):
                     if sheet.cell(row, 34).value == "F":
                         # do rework/fail
                         final_result = False
-                        workorder.do_rework()
-                        if check_id:
-                            workorder.do_fail()
+                        workorder.do_fail()
                     elif sheet.cell(row, 34).value == "P":
                         # do process/pass
                         final_result = True
                         # Check if final quantity then process it after updating test result values
                         rounding = workorder.production_id.product_uom_id.rounding
                         if float_compare((workorder.qty_produced + 1.0), workorder.production_id.product_qty, precision_rounding=rounding) < 0:
-                            if check_id:
-                                workorder.do_pass()
-                            workorder.record_production()
+                            workorder.do_pass()
                         else:
                             last_qty_to_process = True
 
@@ -97,9 +93,6 @@ class MrpWorkorderImportXlsResult(models.TransientModel):
 
         if last_qty_to_process:
             if not workorder.component_tracking and workorder.product_tracking and workorder.product_tracking == "serial":
-                if workorder.current_quality_check_id:
-                    workorder.do_pass()
-                return workorder.record_production()
-            workorder._next()
+                return workorder.do_pass()
 
         return True

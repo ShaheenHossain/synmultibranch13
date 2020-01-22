@@ -2,6 +2,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 from odoo import models, _
+from odoo.tools import float_compare
 from odoo.exceptions import UserError
 
 
@@ -20,8 +21,6 @@ class MrpProduction(models.Model):
 
         # create reworkorder if not available
         reworkcenter_id = self.env['mrp.workcenter'].browse(int(default_reworkcenter_id))
-        quantity = self.product_qty - sum(self.move_finished_ids.mapped('quantity_done'))
-        quantity = quantity if (quantity > 0) else 0
         workorder = self.env['mrp.workorder'].create({
             'name': reworkcenter_id.name,
             'production_id': self.id,
@@ -30,7 +29,7 @@ class MrpProduction(models.Model):
             'operation_id': False,
             'state': 'pending',
             'is_reworkorder': True,
-            'qty_producing': quantity,
+            'qty_producing': 0, # Initial rework qty producing
             'consumption': self.bom_id.consumption,
         })
         return workorder
@@ -53,11 +52,17 @@ class MrpProduction(models.Model):
         # Remove all the unused created lots to keep available for another MO
         StockQuant = self.env['stock.quant']
         lots_to_delete = self.env['stock.production.lot']
+        precision = self.env['decimal.precision'].precision_get('Product Unit of Measure')
         created_lots = self.workorder_ids.mapped('created_finished_lot_ids')
         for lot in created_lots:
             # Ensure that created lot has not quant available
-            quants = StockQuant._gather(self.product_id, self.location_dest_id, lot_id=lot, strict=True)
-            if not quants:
+            if float_compare(StockQuant._get_available_quantity(
+                self.product_id,
+                self.location_dest_id,
+                lot_id=lot,
+                strict=True
+            ), 0, precision_digits=precision) <= 0:
                 lots_to_delete |= lot
+
         lots_to_delete.unlink()
         return res

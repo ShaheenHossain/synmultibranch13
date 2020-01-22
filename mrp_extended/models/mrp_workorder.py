@@ -20,12 +20,15 @@ class MrpWorkorder(models.Model):
     )
     def _check_has_rework(self):
         for wo in self:
-            if wo.current_quality_check_id and\
-                wo.current_quality_check_id.workorder_line_id and\
-                wo.current_quality_check_id.workorder_line_id.move_line_id and \
-                wo.current_quality_check_id.workorder_line_id.move_line_id.id in wo.to_reworkorder_line_ids.mapped('move_line_id').ids:
+            reworkorder_lines = wo.production_id.workorder_ids.filtered(
+                    lambda workorder: not workorder.is_reworkorder
+                ).mapped('to_reworkorder_line_ids')
+            if wo.lot_id and wo.lot_id.id in reworkorder_lines.filtered(
+                    lambda rewol: rewol.rework_state != "done"
+                ).mapped('move_line_id').mapped('lot_id').ids:
                 wo.has_rework = True
-            elif wo.production_id.workorder_ids.to_reworkorder_line_ids._origin.filtered(lambda rewol: wo.finished_lot_id and wo.finished_lot_id.id == rewol.lot_id.id and rewol.rework_state != "done"):
+            elif reworkorder_lines.filtered(lambda rewol: wo.finished_lot_id and\
+                wo.finished_lot_id.id == rewol.lot_id.id and rewol.rework_state != "done"):
                 wo.has_rework = True
             else:
                 wo.has_rework = False
@@ -45,6 +48,19 @@ class MrpWorkorder(models.Model):
             else:
                 wokorder.previously_finished_check_ids = []
 
+    @api.depends('to_reworkorder_line_ids', 'to_reworkorder_line_ids.rework_state', 'finished_reworkorder_line_ids')
+    def _get_qty_rework(self):
+        for wo in self:
+            if not wo.is_reworkorder:
+                wo.qty_rework = 0.0
+            reworkorder_id = (wo.production_id.workorder_ids - wo).filtered(
+                    lambda wokorder: wokorder.is_reworkorder
+                )
+            if reworkorder_id:
+                reworkorder_lines = reworkorder_id._defaults_from_to_reworkorder_line()
+                reworkorder_id.qty_rework = sum(reworkorder_lines.mapped('qty_done'))
+
+    qty_rework = fields.Float('Rework Quantity', compute='_get_qty_rework', readonly=True, store=True)
     is_reworkorder = fields.Boolean("Is Rework Order",
         help="Check if workorder is rework order or not.")
     reworkorder_id = fields.Many2one("mrp.workorder", "Rework Station Workorder",
@@ -82,9 +98,7 @@ class MrpWorkorder(models.Model):
         for wo in self.filtered(lambda workorder: not workorder.is_reworkorder):
             wo.qty_remaining = float_round(wo.qty_production - wo.qty_produced, precision_rounding=wo.production_id.product_uom_id.rounding)
         for rewo in self.filtered(lambda reworkorder: reworkorder.is_reworkorder):
-            reworkorder_lines = rewo._defaults_from_to_reworkorder_line()
-            qty_to_consume = len(reworkorder_lines.filtered(lambda rewol: rewol.rework_state == "pending"))
-            rewo.qty_remaining = float_round(qty_to_consume or 1, precision_rounding=rewo.production_id.product_uom_id.rounding)
+            rewo.qty_remaining = float_round(rewo.qty_rework or 1, precision_rounding=rewo.production_id.product_uom_id.rounding)
 
     @api.model
     def _search(self, args, offset=0, limit=None, order=None, count=False, access_rights_uid=None):
@@ -116,7 +130,18 @@ class MrpWorkorder(models.Model):
         finished_lots = self.move_line_ids.filtered(
                 lambda ml: float_compare(ml.qty_done, ml.product_uom_qty, precision_rounding=ml.product_uom_id.rounding) == 0
             ).mapped('lot_id')
-        Lots |= (reserved_lots - finished_lots)
+
+        # get rework lines
+        reworkorder_lines = self.production_id.workorder_ids.filtered(
+                lambda workorder: not workorder.is_reworkorder
+            ).mapped('to_reworkorder_line_ids')
+
+        to_rework_lots = reworkorder_lines.filtered(
+                lambda rewol: rewol.rework_state != "done"
+            ).mapped('move_line_id').mapped('lot_id')
+
+        # ignore finished and rework lots
+        Lots |= ((reserved_lots - finished_lots) - to_rework_lots)
         return Lots
 
     def _defaults_from_to_reworkorder_line(self):
@@ -163,13 +188,13 @@ class MrpWorkorder(models.Model):
                 return True
         return False
 
-    def _apply_update_workorder_lines(self):
-        previous_wo = self.env[self._name].search([
-                    ('next_work_order_id', '=', self.id)
-                ])
-        if previous_wo and previous_wo.reworkorder_id:
-            return super(MrpWorkorder, previous_wo.reworkorder_id)._apply_update_workorder_lines()
-        return super(MrpWorkorder, self)._apply_update_workorder_lines()
+    # def _apply_update_workorder_lines(self):
+    #     previous_wo = self.env[self._name].search([
+    #                 ('next_work_order_id', '=', self.id)
+    #             ])
+    #     if previous_wo and previous_wo.reworkorder_id:
+    #         return super(MrpWorkorder, previous_wo.reworkorder_id)._apply_update_workorder_lines()
+    #     return super(MrpWorkorder, self)._apply_update_workorder_lines()
 
     @api.model
     def _generate_lines_values(self, move, qty_to_consume):
@@ -193,7 +218,9 @@ class MrpWorkorder(models.Model):
         # if not move_line_ids and self.to_reworkorder_line_ids:
         #     move_line_ids = self.to_reworkorder_line_ids.mapped('move_line_id')
 
-        move_line_ids = ((move.move_line_ids - move.move_line_ids.filtered(lambda ml: ml.lot_produced_ids or float_compare(ml.product_uom_qty, ml.qty_done, precision_rounding=move.product_uom.rounding) <= 0)) - self.to_reworkorder_line_ids.mapped('move_line_id'))
+        move_line_ids = ((move.move_line_ids - move.move_line_ids.filtered(
+                    lambda ml: ml.lot_produced_ids or float_compare(ml.product_uom_qty, ml.qty_done, precision_rounding=move.product_uom.rounding) <= 0
+                )) - self.to_reworkorder_line_ids.mapped('move_line_id'))
         if not move_line_ids:
             move_line_ids = self.to_reworkorder_line_ids.mapped('move_line_id')
         for move_line in move_line_ids:
@@ -256,12 +283,15 @@ class MrpWorkorder(models.Model):
                 line['qty_done'] = 0
         return lines
 
-    def do_rework(self):
+    def do_rework(self, auto=False):
         self.ensure_one()
+        check_id = self.current_quality_check_id
         if self.component_tracking == "serial" and not self.lot_id:
             raise UserError(_("Please enter a serial number for component!."))
-        if not self.current_quality_check_id and self.product_tracking == "serial" and not self.finished_lot_id:
+        if not check_id and self.product_tracking == "serial" and not self.finished_lot_id:
             raise UserError(_("Please enter a serial number for product!."))
+
+        # Create or Update Rework Order
         mrp_rework_orders_action = self.env["ir.config_parameter"].sudo().get_param("mrp_extended.mrp_rework_orders_action")
         default_reworkcenter_id = self.env["ir.config_parameter"].sudo().get_param("mrp_extended.default_reworkcenter_id")
         self.reworkorder_id = self.production_id.workorder_ids.filtered(
@@ -276,8 +306,21 @@ class MrpWorkorder(models.Model):
             'state': 'ready',
         })
 
-        check_id = self.current_quality_check_id
-        if check_id and self.component_tracking == "serial" and self.product_tracking == "serial":
+        # Link related move line to the work order line
+        move_line_id = False
+        if self.lot_id:
+            move_finished_ids = self.move_finished_ids.filtered(lambda move: move.product_id != self.product_id and move.state not in ('done', 'cancel'))
+            move_raw_ids = self.move_raw_ids.filtered(lambda move: move.state not in ('done', 'cancel'))
+            for move in move_raw_ids | move_finished_ids:
+                move_line_ids = ((move.move_line_ids - move.move_line_ids.filtered(
+                            lambda ml: ml.lot_produced_ids or float_compare(ml.product_uom_qty, ml.qty_done, precision_rounding=move.product_uom.rounding) <= 0
+                        )) - self.to_reworkorder_line_ids.mapped('move_line_id'))
+                move_line_id = move_line_ids.filtered(lambda ml: ml.lot_id and ml.lot_id.id == self.lot_id.id)
+                if move_line_id:
+                    break
+
+        # Ensure that product or component has tracking is not none
+        if self.component_tracking == "serial" and self.product_tracking == "serial":
             self._assign_component_lot_to_finish_lot()
             self.raw_workorder_line_ids = [(1, line.id, {
                     'raw_workorder_id': False,
@@ -285,9 +328,9 @@ class MrpWorkorder(models.Model):
                     'qty_done': 1,
                     'company_id': line._get_production().company_id.id,
                     'lot_id': self.finished_lot_id,
+                    'move_line_id': move_line_id,
                 }) for line in self.raw_workorder_line_ids]
             reworkorder_lines = self.reworkorder_id._defaults_from_to_reworkorder_line().filtered(lambda rewol: rewol.move_line_id)
-            check_id.unlink()
         elif not self.component_tracking and self.product_tracking == "serial":
             self.env['mrp.workorder.line'].create({
                     'product_id': self.product_id.id,
@@ -295,15 +338,72 @@ class MrpWorkorder(models.Model):
                     'orig_rewo_id': self.id,
                     'qty_done': 1,
                     'lot_id': self.finished_lot_id.id,
+                    'move_line_id': move_line_id,
                 })
             reworkorder_lines = self.reworkorder_id._defaults_from_to_reworkorder_line()
-        # reference_lot_lines = self.to_reworkorder_line_ids.filtered(lambda rewol: rewol.move_line_id)
-        self.reworkorder_id._defaults_from_finished_workorder_line(reworkorder_lines.sorted(key=lambda rewol: rewol.create_date, reverse=True))
+
+        # Need to update quality check in case of manual rework
+        if not auto:
+            # Unlink for bypass material registration
+            if check_id.test_type == "register_consumed_materials":
+                check_id.unlink()
+            else:
+                # Mark fail and assign finished lot to track
+                check_id.do_fail()
+                if self.finished_lot_id:
+                    check_id.write({
+                        'finished_lot_id': self.finished_lot_id.id
+                    })
+
+        # Update Rework Order for setting up default values
+        self.reworkorder_id._defaults_from_finished_workorder_line(reworkorder_lines.sorted(
+                key=lambda rewol: rewol.create_date, reverse=True
+            ))
         self.reworkorder_id._create_checks()
+
+        # Update current work order for next step
         self._apply_update_workorder_lines()
-        self.finished_lot_id = False
-        self._create_checks()
+        self.write({'finished_lot_id': False, 'lot_id': False})
+        rounding = self.product_uom_id.rounding
+        if float_compare(self.qty_producing, 0, precision_rounding=rounding) > 0:
+            self._create_checks()
+
+        # Get the position of quality check for next step
+        increment = (len(self.check_ids) or 1) - 1
+        # Need to change quality check only when multiple available
+        if increment > 0:
+            if self.skip_completed_checks:
+                self._change_quality_check(increment=increment, children=1, checks=self.skipped_check_ids)
+            else:
+                self._change_quality_check(increment=increment, children=1)
+
         return True
+
+    def do_fail(self):
+        self.ensure_one()
+        # Ensure that finished lot is available for auto record production from `_next` step
+        if self.product_tracking != 'none' and not self.finished_lot_id:
+            raise UserError(_('You should provide a lot for the final product !'))
+        check_id = self.current_quality_check_id
+        res = super(MrpWorkorder, self).do_fail()
+        if self.check_ids:
+            # Check if you can attribute the lot to the checks
+            if (self.production_id.product_id.tracking != 'none') and self.finished_lot_id:
+                self.check_ids.filtered(lambda check: not check.finished_lot_id).write({
+                    'finished_lot_id': self.finished_lot_id.id
+                })
+        # Do Rework
+        if check_id and check_id.point_id and check_id.point_id.rework_process == "auto":
+            self.do_rework(auto=True)
+        # Returning super redirect fail message
+        return res
+
+    def do_pass(self):
+        self.ensure_one()
+        # Ensure that finished lot is available for auto record production from `_next` step
+        if self.product_tracking != 'none' and not self.finished_lot_id:
+            raise UserError(_('You should provide a lot for the final product !'))
+        return super(MrpWorkorder, self).do_pass()
 
     def _create_or_update_rework_finished_line(self):
         current_lot_lines = self.finished_reworkorder_line_ids.filtered(lambda line: line.lot_id == self.finished_lot_id)
@@ -315,6 +415,7 @@ class MrpWorkorder(models.Model):
                 'lot_id': self.finished_lot_id.id,
                 'qty_done': self.qty_producing,
                 'company_id': self.production_id.company_id.id,
+                'rework_state': "done",
             })
         else:
             current_lot_lines.qty_done += self.qty_producing
@@ -374,8 +475,8 @@ class MrpWorkorder(models.Model):
         # Test if the production is done
         rounding = self.production_id.product_uom_id.rounding
         # Get to rework lines length
-        qty_production = len(self._defaults_from_to_reworkorder_line())
-        if float_compare(self.qty_produced, qty_production, precision_rounding=rounding) < 0:
+        # qty_production = len(self._defaults_from_to_reworkorder_line())
+        if float_compare(self.qty_produced, self.qty_rework, precision_rounding=rounding) < 0:
             previous_wo = self.env['mrp.workorder']
             if self.product_tracking != 'none':
                 previous_wo = self.env['mrp.workorder'].search([
@@ -408,10 +509,7 @@ class MrpWorkorder(models.Model):
 
         if self.is_reworkorder:
             self = self.with_context(reworkorder_id=self.id)
-            res = self.record_rework_production()
-            if not self.orig_move_line_id:
-                self.button_pending()
-            return res
+            return self.record_rework_production()
         res = super(MrpWorkorder, self).record_production()
         # check if final WO then done rework here
         if self.is_last_unfinished_wo and self.state == "done":
@@ -435,16 +533,41 @@ class MrpWorkorder(models.Model):
 
     def _assign_component_lot_to_finish_lot(self):
         self.ensure_one()
+
+        # Search for candidate lot depends on component lot
+        candidate_lot = self.env['stock.production.lot'].search([
+                ('name', '=', self.lot_id.name),
+                ('product_id', '=', self.product_id.id),
+                ('company_id', '=', self.company_id.id),
+            ])
+
+        # Check lot has quants available
+        get_available_quantity = lambda lot: self.env['stock.quant']._get_available_quantity(
+                self.product_id,
+                self.production_id.location_dest_id,
+                lot_id=lot,
+                strict=True
+            )
+
+        precision = self.env['decimal.precision'].precision_get('Product Unit of Measure')
+
+        def _check_candidate_availability(candidate_lot):
+            available_quantity = get_available_quantity(candidate_lot)
+            if float_compare(available_quantity, 0, precision_digits=precision) <= 0:
+                self.finished_lot_id = candidate_lot.id
+            else:
+                raise UserError(_("SN {} of product {} is already available in the system with {} {}.".format(
+                        candidate_lot.name,
+                        self.product_id.display_name,
+                        available_quantity,
+                        self.product_uom_id.name,
+                    )))
+
         if self.component_tracking == "serial" and self.lot_id and self.qty_done != 0:
             if not self.finished_lot_id:
                 # Try search if available then no need to create
-                candidate_lot = self.env['stock.production.lot'].search([
-                        ('name', '=', self.lot_id.name),
-                        ('product_id', '=', self.product_id.id),
-                        ('company_id', '=', self.company_id.id),
-                    ])
                 if candidate_lot:
-                    self.finished_lot_id = candidate_lot.id
+                    _check_candidate_availability(candidate_lot)
                 else:
                     finished_lot_id = self.env['stock.production.lot'].create({
                             'name': self.lot_id.name,
@@ -456,7 +579,10 @@ class MrpWorkorder(models.Model):
                             'created_finished_lot_ids': [(4, finished_lot_id.id)],
                         })
             else:
-                self.finished_lot_id.write({"name": self.lot_id.name})
+                if candidate_lot:
+                    _check_candidate_availability(candidate_lot)
+                else:
+                    self.finished_lot_id.write({"name": self.lot_id.name})
         return True
 
     def _next(self, continue_production=False):
@@ -464,13 +590,13 @@ class MrpWorkorder(models.Model):
         prev_quality_check_id = self.current_quality_check_id
         if self.has_rework:
             raise UserError(_("Rework of this component is currently in progress!"))
-        if self.product_tracking and self.product_tracking == "serial":
+        if self.component_tracking == "serial" and self.product_tracking == "serial":
             self._assign_component_lot_to_finish_lot()
         # super calling: return fail message if quality point available and not auto record production
         res = super(MrpWorkorder, self)._next(continue_production=continue_production)
         if self.is_user_working or self.is_last_step or not self.skipped_check_ids or not self.is_last_lot:
             auto_record = True
-            if prev_quality_check_id and prev_quality_check_id.point_id:
+            if prev_quality_check_id and prev_quality_check_id.quality_state == 'fail':
                 auto_record = False
 
         if auto_record and not continue_production:
@@ -642,6 +768,18 @@ class MrpWorkorder(models.Model):
 class MrpWorkorderLine(models.Model):
     _inherit = 'mrp.workorder.line'
 
+    def _compute_rework_title(self):
+        for line in self:
+            line.rework_title = 'Rework of "{}"'.format(line.product_id.name)
+            line.rework_result = 'Reworked {} - {}, {} {}'.format(
+                    line.product_id.name,
+                    line.lot_id.name,
+                    line.qty_done,
+                    line.product_uom_id.name
+                )
+
+    rework_title = fields.Char('Title', compute='_compute_rework_title')
+    rework_result = fields.Char('Result', compute='_compute_rework_title')
     rework_state = fields.Selection([
         ('pending', "To Rework"),
         ('done', "Done")], string="Rework Status", default="pending")
