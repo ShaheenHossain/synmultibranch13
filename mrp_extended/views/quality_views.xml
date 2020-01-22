@@ -8,7 +8,7 @@
             <field name="test_type_id" position="after">
                 <label for="rework_process"/>
                 <div class="o_row">
-                    <field name="rework_process" nolabel="1" widget="radio" options="{'horizontal': true}" attrs="{'invisible': ['|', ('code', '!=', 'mrp_operation'), ('test_type', '!=', 'passfail')], 'required': ['|', ('code', '=', 'mrp_operation'), ('test_type', '=', 'passfail')]}"/> <span class="oe_inline">If Fail</span>
+                    <field name="rework_process" nolabel="1" options="{'horizontal': true}" attrs="{'invisible': ['|', ('code', '!=', 'mrp_operation'), ('test_type', '!=', 'passfail')], 'required': ['|', ('code', '=', 'mrp_operation'), ('test_type', '=', 'passfail')]}"/> <span class="oe_inline">If Fail</span>
                 </div>
             </field>
         </field>
