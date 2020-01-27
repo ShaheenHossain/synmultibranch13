@@ -43,7 +43,7 @@ class MrpWorkorder(models.Model):
                         lambda check: check.finished_lot_id and check.finished_lot_id.id == wokorder.finished_lot_id.id
                     )
                 # get currently done quality check
-                current_check_ids = wokorder.check_ids.filtered(lambda c: c.finished_product_sequence == wokorder.qty_produced)
+                current_check_ids = wokorder.check_ids._origin.filtered(lambda check: check.finished_lot_id and check.finished_lot_id.id == wokorder.finished_lot_id.id)
                 wokorder.previously_finished_check_ids = [(6, 0, (prev_finished_check_ids + current_check_ids).ids)]
             else:
                 wokorder.previously_finished_check_ids = []
@@ -139,7 +139,6 @@ class MrpWorkorder(models.Model):
         to_rework_lots = reworkorder_lines.filtered(
                 lambda rewol: rewol.rework_state != "done"
             ).mapped('move_line_id').mapped('lot_id')
-
         # ignore finished and rework lots
         Lots |= ((reserved_lots - finished_lots) - to_rework_lots)
         return Lots
@@ -359,23 +358,14 @@ class MrpWorkorder(models.Model):
         self.reworkorder_id._defaults_from_finished_workorder_line(reworkorder_lines.sorted(
                 key=lambda rewol: rewol.create_date, reverse=True
             ))
-        self.reworkorder_id._create_checks()
+        self.reworkorder_id._change_quality_check(position=0)
 
         # Update current work order for next step
         self._apply_update_workorder_lines()
         self.write({'finished_lot_id': False, 'lot_id': False})
         rounding = self.product_uom_id.rounding
         if float_compare(self.qty_producing, 0, precision_rounding=rounding) > 0:
-            self._create_checks()
-
-        # Get the position of quality check for next step
-        increment = (len(self.check_ids) or 1) - 1
-        # Need to change quality check only when multiple available
-        if increment > 0:
-            if self.skip_completed_checks:
-                self._change_quality_check(increment=increment, children=1, checks=self.skipped_check_ids)
-            else:
-                self._change_quality_check(increment=increment, children=1)
+            self.with_context(rework_sequence=True)._create_checks()
 
         return True
 
@@ -454,13 +444,6 @@ class MrpWorkorder(models.Model):
         # Update workorder quantity produced
         self.qty_produced += self.qty_producing
 
-        # Suggest a finished lot on the next workorder
-        if self.next_work_order_id and self.product_tracking != 'none' and (not self.next_work_order_id.finished_lot_id or self.next_work_order_id.finished_lot_id == self.finished_lot_id):
-            self.next_work_order_id._defaults_from_finished_workorder_line(self.finished_workorder_line_ids)
-            # As we may have changed the quantity to produce on the next workorder,
-            # make sure to update its wokorder lines
-            self.next_work_order_id._apply_update_workorder_lines()
-
         # One a piece is produced, you can launch the next work order
         # self._start_nextworkorder()
         to_reworkorder_line_ids = self.production_id.workorder_ids.mapped('to_reworkorder_line_ids')
@@ -475,7 +458,6 @@ class MrpWorkorder(models.Model):
         # Test if the production is done
         rounding = self.production_id.product_uom_id.rounding
         # Get to rework lines length
-        # qty_production = len(self._defaults_from_to_reworkorder_line())
         if float_compare(self.qty_produced, self.qty_rework, precision_rounding=rounding) < 0:
             previous_wo = self.env['mrp.workorder']
             if self.product_tracking != 'none':
@@ -499,6 +481,88 @@ class MrpWorkorder(models.Model):
             # Save reworkorder as pending
             self.button_pending()
         return True
+
+    def _create_checks(self):
+        ''' @Overwrite to manage of changing quality check when put the
+        quantity to the rework process
+        : _change_quality_check: params(`goto`) -> currently created quality check
+        '''
+        for wo in self:
+
+            # skip the reworkorder to stop creating quality checks
+            if wo.is_reworkorder:
+                continue
+
+            # Track components which have a control point
+            processed_move = self.env['stock.move']
+
+            production = wo.production_id
+            points = self.env['quality.point'].search([('operation_id', '=', wo.operation_id.id),
+                                                       ('picking_type_id', '=', production.picking_type_id.id),
+                                                       ('company_id', '=', wo.company_id.id),
+                                                       '|', ('product_id', '=', production.product_id.id),
+                                                       '&', ('product_id', '=', False), ('product_tmpl_id', '=', production.product_id.product_tmpl_id.id)])
+            move_raw_ids = wo.move_raw_ids.filtered(lambda m: m.state not in ('done', 'cancel'))
+            move_finished_ids = wo.move_finished_ids.filtered(lambda m: m.state not in ('done', 'cancel'))
+            values_to_create = []
+            for point in points:
+                # Check if we need a quality control for this point
+                if point.check_execute_now():
+                    moves = self.env['stock.move']
+                    values = {
+                        'workorder_id': wo.id,
+                        'point_id': point.id,
+                        'team_id': point.team_id.id,
+                        'company_id': wo.company_id.id,
+                        'product_id': production.product_id.id,
+                        # Two steps are from the same production
+                        # if and only if the produced quantities at the time they were created are equal.
+                        'finished_product_sequence': wo.qty_produced,
+                    }
+                    if point.test_type == 'register_byproducts':
+                        moves = move_finished_ids.filtered(lambda m: m.product_id == point.component_id)
+                    elif point.test_type == 'register_consumed_materials':
+                        moves = move_raw_ids.filtered(lambda m: m.product_id == point.component_id)
+                    else:
+                        values_to_create.append(values)
+                    # Create 'register ...' checks
+                    for move in moves:
+                        check_vals = values.copy()
+                        check_vals.update(wo._defaults_from_workorder_lines(move, point.test_type))
+                        values_to_create.append(check_vals)
+                    processed_move |= moves
+
+            # Generate quality checks associated with unreferenced components
+            moves_without_check = ((move_raw_ids | move_finished_ids) - processed_move).filtered(lambda move: move.has_tracking != 'none')
+            quality_team_id = self.env['quality.alert.team'].search([], limit=1).id
+            for move in moves_without_check:
+                values = {
+                    'workorder_id': wo.id,
+                    'product_id': production.product_id.id,
+                    'company_id': wo.company_id.id,
+                    'component_id': move.product_id.id,
+                    'team_id': quality_team_id,
+                    # Two steps are from the same production
+                    # if and only if the produced quantities at the time they were created are equal.
+                    'finished_product_sequence': wo.qty_produced,
+                }
+                if move in move_raw_ids:
+                    test_type = self.env.ref('mrp_workorder.test_type_register_consumed_materials')
+                if move in move_finished_ids:
+                    test_type = self.env.ref('mrp_workorder.test_type_register_byproducts')
+                values.update({'test_type_id': test_type.id})
+                values.update(wo._defaults_from_workorder_lines(move, test_type.technical_name))
+                values_to_create.append(values)
+
+            current_check_id = self.env['quality.check'].create(values_to_create)
+            # Set default quality_check
+            wo.skip_completed_checks = False
+
+            # go to next (currently created) quality check when put the qualtity in rework process
+            if self._context.get('rework_sequence', False):
+                wo._change_quality_check(goto=current_check_id.id)
+            else:
+                wo._change_quality_check(position=0)
 
     def record_production(self):
         finished_lot_id = self.finished_lot_id

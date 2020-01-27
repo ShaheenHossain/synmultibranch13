@@ -42,9 +42,9 @@ class MrpProduction(models.Model):
         mrp_rework_orders_action = self.env["ir.config_parameter"].sudo().get_param("mrp_extended.mrp_rework_orders_action")
         if not reworkorder and mrp_rework_orders_action == "automatic":
             reworkorder = self._create_reworkorder()
-        workorder_to_update = workorders.filtered(lambda wo: wo.next_work_order_id and wo.next_work_order_id.id == reworkorder.id)
-        if workorder_to_update:
-            workorder_to_update.write({'next_work_order_id': False})
+        re_workorder_to_update = workorders.filtered(lambda wo: wo.next_work_order_id and wo.next_work_order_id.id == reworkorder.id)
+        if re_workorder_to_update:
+            re_workorder_to_update.write({'next_work_order_id': False})
         return workorders
 
     def _action_cancel(self):
