@@ -597,7 +597,8 @@ class MrpWorkorder(models.Model):
 
     def _assign_component_lot_to_finish_lot(self):
         self.ensure_one()
-
+        if not self.workcenter_id.use_create_lot_from_comp_lot:
+            return False
         # Search for candidate lot depends on component lot
         candidate_lot = self.env['stock.production.lot'].search([
                 ('name', '=', self.lot_id.name),
