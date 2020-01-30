@@ -1,3 +1,7 @@
+1.2
+=======
+- Limit the workorders as per MRP Users
+
 1.1
 =======
 - Multiple(one-by-one) quality (pass/fail) check by test import sheet

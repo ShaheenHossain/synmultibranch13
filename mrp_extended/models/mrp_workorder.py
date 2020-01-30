@@ -3,6 +3,7 @@
 
 from datetime import datetime, timedelta
 from odoo.tools import float_compare, float_round
+from odoo.osv import expression
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, Warning
 
@@ -108,6 +109,15 @@ class MrpWorkorder(models.Model):
                 if args[index][0] == "next_work_order_id" and isinstance(args[index][2], int) and args[index][2] == context['reworkorder_id']:
                     args[index] = ("reworkorder_id", args[index][1], args[index][2])
         return super(MrpWorkorder, self)._search(args, offset, limit, order, count=count, access_rights_uid=access_rights_uid)
+
+    @api.model
+    def search_read(self, domain=None, fields=None, offset=0, limit=None, order=None):
+        ''' @Override: to limit the workorders for MRP users '''
+        domain = domain or []
+        if self.env.user.has_group('mrp.group_mrp_user') and not self.env.user.has_group('mrp.group_mrp_manager'):
+            user_domain = ['|', ['workcenter_id.team_id', '=', False], ['workcenter_id.team_id.user_ids', 'child_of', [self.env.user.id]]]
+            domain = expression.AND([domain, user_domain])
+        return super(MrpWorkorder, self).search_read(domain=domain, fields=fields, offset=offset, limit=limit, order=order)
 
     def _get_previously_finished_lots(self):
         self.ensure_one()

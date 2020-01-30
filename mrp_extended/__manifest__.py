@@ -3,7 +3,7 @@
 
 {
     'name': 'MRP Extention',
-    'version': '1.1',
+    'version': '1.2',
     'category': 'MRP',
     'summary': 'MRP Extention',
     'description': """
