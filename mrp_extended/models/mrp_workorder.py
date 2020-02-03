@@ -108,7 +108,7 @@ class MrpWorkorder(models.Model):
             for index in range(len(args)):
                 if args[index][0] == "next_work_order_id" and isinstance(args[index][2], int) and args[index][2] == context['reworkorder_id']:
                     args[index] = ("reworkorder_id", args[index][1], args[index][2])
-        return super(MrpWorkorder, self)._search(args, offset, limit, order, count=count, access_rights_uid=access_rights_uid)
+        return super(MrpWorkorder, self)._search(args=args, offset=offset, limit=limit, order=order, count=count, access_rights_uid=access_rights_uid)
 
     @api.model
     def search_read(self, domain=None, fields=None, offset=0, limit=None, order=None):

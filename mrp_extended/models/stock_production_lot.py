@@ -8,7 +8,7 @@ class StockProductionLot(models.Model):
     _inherit = 'stock.production.lot'
 
     @api.model
-    def name_search(self, name, args, operator='ilike', limit=100):
+    def name_search(self, name='', args=None, operator='ilike', limit=100):
         if self._context.get('workorder_id', False) and not self._context.get('is_finished_lot_id', False):
             workorder_id = self.env['mrp.workorder'].browse(self._context.get('workorder_id'))
             if not workorder_id.is_reworkorder and workorder_id.component_id and workorder_id.component_id.tracking != "none":
@@ -38,4 +38,4 @@ class StockProductionLot(models.Model):
                     args = [('id', 'in', to_reworkorder_line_ids.mapped('lot_id').ids)]
                 else:
                     args = [('id', 'in', [])]
-        return super(StockProductionLot, self).name_search(name, args=args, operator=operator, limit=limit)
+        return super(StockProductionLot, self).name_search(name=name, args=args, operator=operator, limit=limit)
