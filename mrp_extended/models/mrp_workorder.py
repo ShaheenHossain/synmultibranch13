@@ -760,7 +760,19 @@ class MrpWorkorder(models.Model):
     def _scan_action_finish(self, barcode, lot):
         if lot:
             if not self.is_reworkorder:
-                previously_finished_lots = self._get_previously_finished_lots()
+                if lot.id in self._origin.finished_workorder_line_ids.mapped('lot_id').ids:
+                    return {
+                        'warning': {
+                            'title': _("Warning"),
+                            'message': _("Corresponding product %s of barcode %s is already processed/finished!" % (
+                                    self.product_id.display_name,
+                                    barcode,
+                                )
+                            )
+                        }
+                    }
+
+                previously_finished_lots = self._origin._get_previously_finished_lots()
                 if previously_finished_lots and not (lot.id in previously_finished_lots.ids):
                     return {
                         'warning': {
