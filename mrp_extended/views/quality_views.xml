@@ -6,9 +6,9 @@
         <field name="inherit_id" ref="mrp_workorder.quality_point_view_form_inherit_mrp"/>
         <field name="arch" type="xml">
             <field name="test_type_id" position="after">
-                <label for="rework_process"/>
-                <div class="o_row">
-                    <field name="rework_process" nolabel="1" attrs="{'invisible': ['|', ('code', '!=', 'mrp_operation'), ('test_type', '!=', 'passfail')], 'required': ['|', ('code', '=', 'mrp_operation'), ('test_type', '=', 'passfail')]}"/> <span class="oe_inline">If Fail</span>
+                <label for="rework_process" attrs="{'invisible': ['|', ('code', '!=', 'mrp_operation'), ('test_type', '!=', 'passfail')]}"/>
+                <div class="o_row" attrs="{'invisible': ['|', ('code', '!=', 'mrp_operation'), ('test_type', '!=', 'passfail')]}">
+                    <field name="rework_process" nolabel="1" attrs="{'required': ['|', ('code', '=', 'mrp_operation'), ('test_type', '=', 'passfail')]}"/> <span class="oe_inline">If Fail</span>
                 </div>
             </field>
         </field>

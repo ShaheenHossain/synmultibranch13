@@ -352,7 +352,7 @@ class MrpWorkorder(models.Model):
             reworkorder_lines = self.reworkorder_id._defaults_from_to_reworkorder_line()
 
         # Need to update quality check in case of manual rework
-        if not auto:
+        if check_id and not auto:
             # Unlink for bypass material registration
             if check_id.test_type == "register_consumed_materials":
                 check_id.unlink()
@@ -774,6 +774,9 @@ class MrpWorkorder(models.Model):
 
                 previously_finished_lots = self._origin._get_previously_finished_lots()
                 if previously_finished_lots and not (lot.id in previously_finished_lots.ids):
+                    previous_wo = self.env['mrp.workorder'].search([
+                        ('next_work_order_id', '=', self._origin.id)
+                    ])
                     return {
                         'warning': {
                             'title': _("Warning"),
