@@ -1,0 +1,68 @@
+# -*- coding: utf-8 -*-
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
+
+from odoo import models, _
+from odoo.tools import float_compare
+from odoo.exceptions import UserError
+
+
+class MrpProduction(models.Model):
+    _inherit = 'mrp.production'
+
+    def _create_reworkorder(self):
+        default_reworkcenter_id = self.env["ir.config_parameter"].sudo().get_param("mrp_extended.default_reworkcenter_id")
+        if not default_reworkcenter_id:
+            raise UserError(_("Couldn\'t find default re-workcenter, Please configure re-workcenter first!"))
+
+        # if configured in routing then no need to create reworkorder
+        reworkorder = self.workorder_ids.filtered(lambda wo: wo.workcenter_id.id == int(default_reworkcenter_id))
+        if reworkorder:
+            return reworkorder
+
+        # create reworkorder if not available
+        reworkcenter_id = self.env['mrp.workcenter'].browse(int(default_reworkcenter_id))
+        workorder = self.env['mrp.workorder'].create({
+            'name': reworkcenter_id.name,
+            'production_id': self.id,
+            'workcenter_id': reworkcenter_id.id,
+            'product_uom_id': self.product_id.uom_id.id,
+            'operation_id': False,
+            'state': 'pending',
+            'is_reworkorder': True,
+            'qty_producing': 0, # Initial rework qty producing
+            'consumption': self.bom_id.consumption,
+        })
+        return workorder
+
+    def _generate_workorders(self, exploded_boms):
+        workorders = super(MrpProduction, self)._generate_workorders(exploded_boms)
+        default_reworkcenter_id = self.env["ir.config_parameter"].sudo().get_param("mrp_extended.default_reworkcenter_id")
+        reworkorder = workorders.filtered(lambda wo: wo.workcenter_id.id == int(default_reworkcenter_id))
+        reworkorder.write({'is_reworkorder': True})
+        mrp_rework_orders_action = self.env["ir.config_parameter"].sudo().get_param("mrp_extended.mrp_rework_orders_action")
+        if not reworkorder and mrp_rework_orders_action == "automatic":
+            reworkorder = self._create_reworkorder()
+        re_workorder_to_update = workorders.filtered(lambda wo: wo.next_work_order_id and wo.next_work_order_id.id == reworkorder.id)
+        if re_workorder_to_update:
+            re_workorder_to_update.write({'next_work_order_id': False})
+        return workorders
+
+    def _action_cancel(self):
+        res = super(MrpProduction, self)._action_cancel()
+        # Remove all the unused created lots to keep available for another MO
+        StockQuant = self.env['stock.quant']
+        lots_to_delete = self.env['stock.production.lot']
+        precision = self.env['decimal.precision'].precision_get('Product Unit of Measure')
+        created_lots = self.workorder_ids.mapped('created_finished_lot_ids')
+        for lot in created_lots:
+            # Ensure that created lot has not quant available
+            if float_compare(StockQuant._get_available_quantity(
+                self.product_id,
+                self.location_dest_id,
+                lot_id=lot,
+                strict=True
+            ), 0, precision_digits=precision) <= 0:
+                lots_to_delete |= lot
+
+        lots_to_delete.unlink()
+        return res

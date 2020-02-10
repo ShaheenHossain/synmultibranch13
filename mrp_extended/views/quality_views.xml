@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="quality_point_view_form_inherit_mrp_extended" model="ir.ui.view">
+        <field name="name">quality.point.view.form.inherit.mrp_extended</field>
+        <field name="model">quality.point</field>
+        <field name="inherit_id" ref="mrp_workorder.quality_point_view_form_inherit_mrp"/>
+        <field name="arch" type="xml">
+            <field name="test_type_id" position="after">
+                <label for="rework_process" attrs="{'invisible': ['|', ('code', '!=', 'mrp_operation'), ('test_type', '!=', 'passfail')]}"/>
+                <div class="o_row" attrs="{'invisible': ['|', ('code', '!=', 'mrp_operation'), ('test_type', '!=', 'passfail')]}">
+                    <field name="rework_process" nolabel="1" attrs="{'required': ['|', ('code', '=', 'mrp_operation'), ('test_type', '=', 'passfail')]}"/> <span class="oe_inline">If Fail</span>
+                </div>
+            </field>
+        </field>
+    </record>
+
+</odoo>

@@ -1,0 +1,4 @@
+id,name,model_id/id,group_id/id,perm_read,perm_write,perm_create,perm_unlink
+mrp_team_manufacturing_user,mrp_team_manufacturing_user,model_mrp_team,mrp.group_mrp_user,1,0,0,0
+mrp_team_manufacturing_administrator,mrp_team_manufacturing_administrator,model_mrp_team,mrp.group_mrp_manager,1,1,1,1
+mrp_workorder_excel_test_result_access,mrp_workorder_excel_test_result_access_all,model_mrp_workorder_excel_test_result,,1,1,1,1
