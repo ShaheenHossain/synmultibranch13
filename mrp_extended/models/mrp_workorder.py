@@ -594,6 +594,8 @@ class MrpWorkorder(models.Model):
                 reworkorder_id.write({
                     'date_start': start_date,
                     'date_planned_start': start_date,
+                    'date_finished': start_date,
+                    'date_planned_finished': start_date
                 })
             reworkorder_id.button_finish()
         return res
