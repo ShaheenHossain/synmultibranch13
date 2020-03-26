@@ -3,6 +3,10 @@
 
 from odoo import models, api
 
+import logging
+
+_logger = logging.getLogger(__name__)
+
 
 class StockProductionLot(models.Model):
     _inherit = 'stock.production.lot'
@@ -26,6 +30,8 @@ class StockProductionLot(models.Model):
                     previously_finished_lots -= reworkorder_id._defaults_from_to_reworkorder_line().filtered(
                             lambda rewol: rewol.lot_id and rewol.rework_state == "pending"
                         ).mapped('lot_id')
+
+                _logger.info("\n\n previously_finished_lots: %s, %s " % (len(previously_finished_lots), previously_finished_lots))
                 if previously_finished_lots:
                     args += [('id', 'in', previously_finished_lots.ids)]
                 else:
