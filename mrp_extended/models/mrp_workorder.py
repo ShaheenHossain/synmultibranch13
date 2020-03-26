@@ -7,10 +7,6 @@ from odoo.osv import expression
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, Warning
 
-import logging
-
-_logger = logging.getLogger(__name__)
-
 
 class MrpWorkorder(models.Model):
     _inherit = "mrp.workorder"
@@ -130,7 +126,6 @@ class MrpWorkorder(models.Model):
             previous_wo = self.env['mrp.workorder'].search([
                 ('next_work_order_id', '=', self.id)
             ])
-            _logger.info("\n\n previous_wo : %s , %s" % (previous_wo, previous_wo.display_name))
             if previous_wo:
                 Lots |= previous_wo.finished_workorder_line_ids.mapped('lot_id')
         return Lots
