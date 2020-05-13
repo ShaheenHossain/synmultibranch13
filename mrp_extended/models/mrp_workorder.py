@@ -574,6 +574,23 @@ class MrpWorkorder(models.Model):
             else:
                 wo._change_quality_check(position=0)
 
+    def _adjust_reworkorder_dates(self):
+        self.ensure_one()
+        if self.is_reworkorder and self.state == "pending":
+            start_date = datetime.now()
+
+            values = dict(
+                date_start=start_date,
+                date_planned_start=start_date,
+            )
+
+            # No need to update start date if it is less from end date
+            if self.date_planned_start and self.date_planned_start <= start_date:
+                values.pop('date_planned_start', None)
+
+            self.write(values)
+        return True
+
     def record_production(self):
         finished_lot_id = self.finished_lot_id
         prev_orig_move_line_id = self.orig_move_line_id
@@ -589,15 +606,9 @@ class MrpWorkorder(models.Model):
         if self.is_last_unfinished_wo and self.state == "done":
             reworkorder_id = self.production_id.workorder_ids.filtered(lambda workorder: workorder.is_reworkorder)
             # check if reworkorder is not processed then update it's planned dates
-            if reworkorder_id and reworkorder_id.state == "pending":
-                start_date = datetime.now()
-                reworkorder_id.write({
-                    'date_start': start_date,
-                    'date_planned_start': start_date,
-                    'date_finished': start_date,
-                    'date_planned_finished': start_date
-                })
-            reworkorder_id.button_finish()
+            if reworkorder_id:
+                reworkorder_id._adjust_reworkorder_dates()
+                reworkorder_id.button_finish()
         return res
 
     def button_start(self):

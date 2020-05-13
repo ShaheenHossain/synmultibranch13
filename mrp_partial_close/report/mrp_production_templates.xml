@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <template id="report_mrporder_partial_close" inherit_id="mrp.report_mrporder">
+        <xpath expr="//div[hasclass('row')][last()]//div[2]/strong" position="attributes">
+            <attribute name="t-if">not o.is_partial_done</attribute>
+        </xpath>
+        <xpath expr="//div[hasclass('row')][last()]//div[2]/strong" position="after">
+            <strong t-if="o.is_partial_done">Original Quantity To Produce:</strong>
+        </xpath>
+        <xpath expr="//div[hasclass('row')][last()]" position="inside">
+            <div class="col-3">
+                <strong>Quantity Produced:</strong><br/>
+                <span t-field="o.qty_produced" t-options='{"widget": "float", "decimal_precision": "Product Unit of Measure"}'/>
+                <span t-field="o.product_uom_id.name" groups="uom.group_uom"/>
+            </div>
+        </xpath>
+    </template>
+
+</odoo>
