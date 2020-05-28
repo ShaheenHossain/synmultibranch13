@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_mrp_production_filter_partial_close" model="ir.ui.view">
+        <field name="name">mrp.production.select.partial_close</field>
+        <field name="model">mrp.production</field>
+        <field name="inherit_id" ref="mrp.view_mrp_production_filter"/>
+        <field name="arch" type="xml">
+            <filter name="filter_done" position="before">
+                <filter string="Partial Done" name="partial_done" domain="[('is_partial_done', '!=', False)]"/>
+            </filter>
+        </field>
+    </record>
+
+    <record id="mrp_production_form_view_partial_close" model="ir.ui.view">
+        <field name="name">mrp.production.form.partial_close</field>
+        <field name="model">mrp.production</field>
+        <field name="inherit_id" ref="mrp.mrp_production_form_view"/>
+        <field name="arch" type="xml">
+            <button name="button_mark_done" position="after">
+                <button name="button_mark_partial_done" string="Mark as Done" type="object" attrs="{'invisible': ['|', ('post_visible', '=', False), ('state', '=', 'to_close')]}"/>
+            </button>
+            <xpath expr="//label[@for='product_qty']" position="replace"/>
+            <field name="product_tmpl_id" position="after">
+                <div name="product_qty_label" class="o_td_label product_qty_label">
+                    <label for="product_qty" attrs="{'invisible': [('is_partial_done', '!=', False)]}"/>
+                    <label for="product_qty" string="Original Quantity To Produce" attrs="{'invisible': [('is_partial_done', '!=', True)]}"/>
+                </div>
+            </field>
+            <field name="bom_id" position="before">
+                <field name="is_partial_done" invisible="1"/>
+                <label for="qty_produced" attrs="{'invisible': [('is_partial_done', '!=', True)]}"/>
+                <div class="o_row no-gutters d-flex" attrs="{'invisible': [('is_partial_done', '!=', True)]}">
+                    <div class="col">
+                        <field name="qty_produced" class="mr-1" attrs="{'invisible': [('is_partial_done', '!=', True)]}"/>
+                        <field name="product_uom_id2" options="{'no_open':True, 'no_create':True}" force_save="1" groups="uom.group_uom"/>
+                    </div>
+                </div>
+            </field>
+            <xpath expr="//page[last()]/group" position="after">
+                <group name="partial_close_reason" string="Reason for partial close" attrs="{'invisible': [('partial_close_reason', 'in', ('', False))]}">
+                    <field name="partial_close_reason" nolabel="1"/>
+                </group>
+            </xpath>
+         </field>
+    </record>
+</odoo>
