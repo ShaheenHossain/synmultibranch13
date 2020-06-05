@@ -21,8 +21,10 @@
         'views/mrp_workcenter_view.xml',
         'wizard/mrp_workorder_import_excel_xls_view.xml',
         'wizard/mrp_workorder_rework_confirmation_views.xml',
+        'wizard/mrp_workorder_unbuild_confirmation_view.xml',
         'views/mrp_workorder_view.xml',
         'views/res_config_settings_views.xml',
+        'views/stock_production_lot_view.xml'
     ],
     'images': [],
     'installable': True,

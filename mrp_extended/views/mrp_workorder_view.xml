@@ -82,6 +82,7 @@
         <field name="arch" type="xml">
             <field name="finished_workorder_line_ids" position="after">
                 <field name="has_rework" invisible="1"/>
+                <field name="has_rebuilt" invisible="1"/>
                 <field name="is_reworkorder" invisible="1"/>
                 <field name="test_type" invisible="1"/>
                 <field name="reworkorder_id" invisible="1"/>
@@ -115,10 +116,16 @@
                 <div style="display: inline-block;" attrs="{'invisible': ['|', '|', ('is_reworkorder', '!=', False), ('component_tracking', '!=', False), ('has_rework', '!=', True)]}">
                     <h2><span class="badge badge-pill badge-danger">In Rework</span></h2>
                 </div>
+                <div style="display: inline-block;" attrs="{'invisible': ['|', '|', ('is_reworkorder', '!=', False), ('component_tracking', '!=', False), ('has_rebuilt', '!=', True)]}">
+                    <h3><span class="badge badge-pill badge-danger">Need to Rebuilt</span></h3>
+                </div>
             </xpath>
             <xpath expr="//div[hasclass('o_workorder_field')]" position="after">
-                <div attrs="{'invisible': [ ('has_rework', '!=', True)]}">
+                <div attrs="{'invisible': [('has_rework', '!=', True)]}">
                     <h2><span class="badge badge-pill badge-danger">In Rework</span></h2>
+                </div>
+                <div style="display: inline-block;" attrs="{'invisible': [('has_rebuilt', '!=', True)]}">
+                    <h3><span class="badge badge-pill badge-danger">Need to Rebuilt</span></h3>
                 </div>
             </xpath>
             <field name="finished_product_check_ids" position="replace"/>
@@ -137,6 +144,23 @@
                 </field>
             </xpath>
          </field>
+    </record>
+
+    <record model="ir.ui.view" id="mrp_workorder_view_form_tablet_menu_inherit">
+        <field name="name">mrp.workorder.view.form.tablet.menu.inherit</field>
+        <field name="model">mrp.workorder</field>
+        <field name="inherit_id" ref="mrp_workorder.mrp_workorder_view_form_tablet_menu"/>
+        <field name="arch" type="xml">
+            <!-- <div id="workorder_maintenance_button" position="before">
+                <div class="col-6" id="workorder_unbuild_button">
+                    <button name="button_unbuild" type="object" class="btn-warning btn-block btn btn-lg" string="Unbuild"/>
+                </div>
+            </div> -->
+            <div id="workorder_maintenance_button" position="inside">
+                <field name="is_reworkorder" invisible="1"/>
+                <button name="%(mrp_workorder_unbuild_confirmation_action)d" type="action" class="btn-warning btn-block btn btn-lg" attrs="{'invisible': [('is_reworkorder', '=', False)]}" string="Unbuild"/>
+            </div>
+        </field>
     </record>
 
     <record model="ir.ui.view" id="mrp_workorder_view_form_tablet_inherit_quality_ext">
@@ -159,6 +183,7 @@
         <field name="arch" type="xml">
             <form string="Workorder Actions">
                 <field name="is_reworkorder" invisible="1"/>
+                <field name="has_rebuilt" invisible="1"/>
                 <group string="Finished Rework" attrs="{'invisible': ['|', ('is_reworkorder', '=', False), ('finished_reworkorder_line_ids', '=', [])]}">
                     <field name="finished_reworkorder_line_ids" options="{'no_open': True, 'clickable': 0}" readonly="1" nolabel="1">
                         <tree decoration-success="move_line_id == False" decoration-danger="move_line_id != False">
@@ -186,6 +211,31 @@
                             <field name="qty_done" string="Produced"/>
                             <field name="product_uom_id" invisible="1"/>
                         </tree>
+                    </field>
+                </group>
+                <group string="Rebuilt Component" attrs="{'invisible': ['|', ('has_rebuilt', '!=', False), ('rebuilt_component_ids', '=', [])]}">
+                    <field name="rebuilt_component_ids" options="{'no_open': True, 'clickable': 0}" readonly="1" nolabel="1">
+                        <tree decoration-success="status == 'done'" decoration-warning="status == 'pending'">
+                            <field name="component_lot_id"/>
+                            <field name="finished_lot_ids" widget="many2many_tags"/>
+                            <field name="workorder_id" invisible="1"/>
+                            <field name="status"/>
+                        </tree>
+                        <form string="Rebuilt Component">
+                            <header>
+                                <field name="status" widget="statusbar" statusbar_visible="pending,done"/>
+                            </header>
+                            <sheet>
+                                <group>
+                                    <group>
+                                        <field name="component_lot_id"/>
+                                    </group>
+                                    <group>
+                                        <field name="finished_lot_ids" widget="many2many_tags"/>
+                                    </group>
+                                </group>
+                            </sheet>
+                        </form>
                     </field>
                 </group>
                 <group string="Rework" attrs="{'invisible': ['|', ('is_reworkorder', '!=', False), ('to_reworkorder_line_ids', '=', [])]}">
