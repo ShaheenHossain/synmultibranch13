@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <!-- MRP BOM Multi Branch Rule  -->
+    <record id="mrp_bom_branch_user_rule" model="ir.rule">
+        <field name="name">Mrp bom multi-Branch User</field>
+        <field name="model_id" ref="mrp.model_mrp_bom"/>
+        <field name="global" eval="True"/>
+        <field name="domain_force">['|',('branch_id','=',False),('branch_id','in',[branch.id for branch in user.branch_ids])]</field>
+    </record>
+
+    <!-- MRP BOM Line Multi Branch Rule  -->
+    <record id="mrp_bom_line_branch_user_rule" model="ir.rule">
+        <field name="name">Mrp bom line multi-Branch User</field>
+        <field name="model_id" ref="mrp.model_mrp_bom_line"/>
+        <field name="global" eval="True"/>
+        <field name="domain_force">['|',('branch_id','=',False),('branch_id','in',[branch.id for branch in user.branch_ids])]</field>
+    </record>
+
+    <!-- MRP Production Multi Branch Rule  -->
+    <record id="mrp_production_branch_user_rule" model="ir.rule">
+        <field name="name">Mrp production multi-Branch User</field>
+        <field name="model_id" ref="mrp.model_mrp_production"/>
+        <field name="global" eval="True"/>
+        <field name="domain_force">['|',('branch_id','=',False),('branch_id','in',[branch.id for branch in user.branch_ids])]</field>
+    </record>
+
+    <!-- Stock Move Multi Branch Rule  -->
+    <record id="stock_move_branch_user_rule" model="ir.rule">
+        <field name="name">Stock move multi-Branch User</field>
+        <field name="model_id" ref="stock.model_stock_move"/>
+        <field name="global" eval="True"/>
+        <field name="domain_force">['|',('branch_id','=',False),('branch_id','in',[branch.id for branch in user.branch_ids])]</field>
+    </record>
+
+    <!-- Stock Picking Type Multi Branch Rule  -->
+    <record id="stock_picking_type_branch_user_rule" model="ir.rule">
+        <field name="name">Stock Picking Type multi-Branch User</field>
+        <field name="model_id" ref="stock.model_stock_picking_type"/>
+        <field name="global" eval="True"/>
+        <field name="domain_force">['|',('branch_id','=',False),('branch_id','in',[branch.id for branch in user.branch_ids])]</field>
+    </record>
+
+    <!-- MRP Workorder Multi Branch Rule  -->
+    <record id="mrp_workorder_branch_user_rule" model="ir.rule">
+        <field name="name">Mrp workorder multi-Branch User</field>
+        <field name="model_id" ref="mrp.model_mrp_workorder"/>
+        <field name="global" eval="True"/>
+        <field name="domain_force">['|',('branch_id','=',False),('branch_id','in',[branch.id for branch in user.branch_ids])]</field>
+    </record>
+
+    <!-- Stock Move Line Multi Branch Rule  -->
+    <record id="stock_move_line_branch_user_rule" model="ir.rule">
+        <field name="name">Stock move line multi-Branch User</field>
+        <field name="model_id" ref="stock.model_stock_move_line"/>
+        <field name="global" eval="True"/>
+        <field name="domain_force">['|',('branch_id','=',False),('branch_id','in',[branch.id for branch in user.branch_ids])]</field>
+    </record>
+</odoo>

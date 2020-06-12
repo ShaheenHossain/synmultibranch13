@@ -32,6 +32,8 @@ class MrpProduction(models.Model):
             'qty_producing': 0, # Initial rework qty producing
             'consumption': self.bom_id.consumption,
         })
+        if 'branch_id' in self.env['mrp.workorder']._fields and 'branch_id' in self.env['mrp.production']._fields:
+            workorder.branch_id = self.branch_id.id
         return workorder
 
     def _generate_workorders(self, exploded_boms):

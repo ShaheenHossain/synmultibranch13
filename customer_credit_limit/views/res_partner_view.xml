@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <record id="view_partner_credit_limit_form" model="ir.ui.view">
+        <field name="name">res.partner.credit.limit.inherit</field>
+        <field name="model">res.partner</field>
+        <field name="priority">3</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <group name="sale" position="inside">
+                <field name="credit_limit" readonly="1" groups="sales_team.group_sale_salesman,account.group_account_manager"/>
+                <field name="customer_rank" invisible="1"/>
+            </group>
+            <notebook position="inside">
+                <page name="other_information" attrs="{'invisible': [('customer_rank','&lt;', 1)]}" string="Other Information">
+                    <group>
+                        <field name="is_distributor"/>
+                    </group>
+                    <div class="oe_title">
+                        <label for="name_on_board"/>
+                        <field name="name_on_board" attrs="{'required': [('is_distributor', '=', True)]}"/>
+                    </div>
+                    <group name="other_main">
+                        <group name="other_cr" string="CR">
+                            <field name="cr_no" attrs="{'required': [('is_distributor', '=', True)]}"/>
+                            <field name="cr_issue_date" attrs="{'required': [('is_distributor', '=', True)]}"/>
+                            <field name="cr_expiry_date" attrs="{'required': [('is_distributor', '=', True)]}"/>
+                        </group>
+                        <group name="other_license" string="License">
+                            <field name="license_no"/>
+                            <field name="license_issue_date"/>
+                            <field name="license_expiry_date"/>
+                        </group>
+                    </group>
+                </page>
+            </notebook>
+        </field>
+    </record>
+    <record id="view_partner_name_on_board_search" model="ir.ui.view">
+        <field name="name">res.partner.name.on.board.search</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_res_partner_filter"/>
+        <field name="arch" type="xml">
+            <field name="name" position="attributes">
+                <attribute name="filter_domain">['|', '|', '|', ('display_name', 'ilike', self), ('ref', '=', self), ('email', 'ilike', self), ('name_on_board', 'ilike', self)]</attribute>
+            </field>
+            <field name="name" position="after">
+                <field name="name_on_board"/>
+            </field>
+        </field>
+    </record>
+</odoo>

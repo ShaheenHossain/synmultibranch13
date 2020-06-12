@@ -1,0 +1,120 @@
+<?xml version="1.0" ?>
+<odoo>
+
+    <record id="update_credit_line_tree_view" model="ir.ui.view">
+        <field name="name">update.credit.line.tree.view</field>
+        <field name="model">update.credit.line</field>
+        <field name="arch" type="xml">
+            <tree>
+                <field name="update_credit_id" invisible="1"/>
+                <field name="partner_id"/>
+                <field name="old_credit"/>
+                <field name="calculated_credit"/>
+                <field name="new_credit"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="update_credit_line_form_view" model="ir.ui.view">
+        <field name="name">update_credit_line_form</field>
+        <field name="model">update.credit.line</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <div>
+                        <label for="partner_id"/>
+                        <h2>
+                            <field name="partner_id"/>
+                        </h2>
+                    </div>
+                    <group>
+                        <field name="update_credit_id" invisible="1"/>
+                        <field name="old_credit"/>
+                        <field name="calculated_credit"/>
+                        <field name="new_credit"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="update_credit_tree_view" model="ir.ui.view">
+        <field name="name">update.credit.tree.view</field>
+        <field name="model">update.credit</field>
+        <field name="arch" type="xml">
+            <tree>
+                <field name="name"/>
+                <field name="date_time"/>
+                <field name="user_id"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="update_credit_form_view" model="ir.ui.view">
+        <field name="name">update.credit.form.view</field>
+        <field name="model">update.credit</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_confirm" string="Confirm" type="object" states="draft" class="oe_highlight" groups="sales_team.group_sale_salesman"/>
+                    <button name="action_done" string="Update Credit Limit" type="object" states="waiting_approval" class="oe_highlight" groups="sales_team.group_sale_manager,account.group_account_manager"/>
+                    <button name="action_cancel" string="Cancel" type="object" states="draft,waiting_approval" groups="sales_team.group_sale_manager,account.group_account_manager"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,done"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h2>
+                            <field name="name" readonly="1"/>
+                        </h2>
+                        <group>
+                            <field name="date_time" readonly="1"/>
+                            <field name="user_id" readonly="1"/>
+                            <field name="quarter" readonly="1"/>
+                        </group>
+                    </div>
+                    <notebook>
+                        <page name="Update Credit Lines" string="Update Credit Lines">
+                            <group string="Update Credit Lines">
+                                <field name="update_credit_line_ids" nolabel="1" attrs="{'readonly': [('state','!=','draft')]}">
+                                    <tree editable="top">
+                                        <field name="update_credit_id" invisible="1"/>
+                                        <field name="partner_id"/>
+                                        <field name="old_credit" readonly="1" force_save="1"/>
+                                        <field name="calculated_credit" readonly="1" force_save="1"/>
+                                        <field name="new_credit"/>
+                                    </tree>
+                                </field>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+
+    <record id="action_update_credit" model="ir.actions.act_window">
+        <field name="name">Update Customer Credit</field>
+        <field name="res_model">update.credit</field>
+        <field name="view_mode">tree,form</field>
+        <field name="view_id" ref="update_credit_tree_view"/>
+        <field name="help" type="html">
+            <div>
+                <br/>
+                <br/>
+                <p>
+                    <b>No Record To Update Customer Credit.</b>
+                    <b>Create A Record By Clicking On "Create" Button.</b>
+                </p>
+            </div>
+        </field>
+    </record>
+
+    <menuitem id="update_credit_menu"
+              parent="sale.sale_order_menu"
+              name="Update Customer Credit Limit"
+              action="action_update_credit"
+              groups="sales_team.group_sale_salesman,account.group_account_manager"
+              sequence="6"/>
+</odoo>
