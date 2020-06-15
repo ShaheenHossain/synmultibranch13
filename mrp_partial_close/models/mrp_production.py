@@ -27,6 +27,28 @@ class MrpProduction(models.Model):
     partial_close_reason = fields.Text(string="Partial Close Reason")
 
     def _mark_partial_done(self, reason=""):
+        # unlink lots if work order line rework_state in 'to_unbuild'
+        reworkorder_id = self.workorder_ids.filtered(lambda wo: wo.is_reworkorder)
+        if reworkorder_id:
+            reworkorder_lines = reworkorder_id._defaults_from_to_reworkorder_line()
+            if reworkorder_id.state not in ('pending', 'done', 'cancel') and\
+                reworkorder_lines and ('to_unbuild' in reworkorder_lines.mapped('rework_state')):
+                StockQuant = self.env['stock.quant']
+                lots_to_delete = self.env['stock.production.lot']
+                precision = self.env['decimal.precision'].precision_get('Product Unit of Measure')
+                created_lots = reworkorder_lines.filtered(lambda re: re.rework_state == 'to_unbuild').mapped('lot_id')
+                for lot in created_lots:
+                    # Ensure that created lot has not quant available
+                    if float_compare(StockQuant._get_available_quantity(
+                        reworkorder_id.product_id,
+                        reworkorder_id.production_id.location_dest_id,
+                        lot_id=lot,
+                        strict=True
+                    ), 0, precision_digits=precision) <= 0:
+                        lots_to_delete |= lot
+
+                lots_to_delete.unlink()
+
         # post inventory and mark as done
         self.button_mark_done()
 
