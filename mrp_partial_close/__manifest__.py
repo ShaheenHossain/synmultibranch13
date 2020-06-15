@@ -7,7 +7,7 @@
     'category': 'MRP',
     'summary': 'MRP Partial Close',
     'description': """
-        This module allow to close the MO before producing all quantity.
+        This module allow to close the MO before producing all quantity
     """,
     'author': 'Synconics Technologies Pvt. Ltd.',
     'website': 'http://www.synconics.com',
