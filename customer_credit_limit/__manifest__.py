@@ -13,6 +13,7 @@
     'website': 'https://www.synconics.com',
     'depends': ['sale_management'],
     'data': [
+        "security/res_groups.xml",
         "data/ir_sequence_data.xml",
         "data/ir_cron_data.xml",
         "views/res_partner_view.xml",

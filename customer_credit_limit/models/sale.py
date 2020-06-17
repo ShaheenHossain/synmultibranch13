@@ -108,7 +108,7 @@ class Sale(models.Model):
         credit_limit_exceeded, credit_duration_exceeded = self.check_credit_limit_exceeded()
         if credit_duration_exceeded and credit_limit_exceeded and not self.env.user.has_group("group_managing_director"):
             raise Warning(_("You can not approve request when customer exceed credit limit and credit duration both."))
-        return self.write({"state": "approved_by_managing_director"})
+        return self.write({"state": "approved_by_sales_manager"})
 
     def request_account_approval(self):
         return self.write({"state": "sent_for_accounts_approval"})
@@ -117,6 +117,9 @@ class Sale(models.Model):
         credit_limit_exceeded, credit_duration_exceeded = self.check_credit_limit_exceeded()
         if credit_duration_exceeded and credit_limit_exceeded and not self.env.user.has_group("group_managing_director"):
             raise Warning(_("You can not approve request when customer exceed credit limit and credit duration both."))
+        return self.write({"state": "approved_by_account_manager"})
+
+    def approve_ceo(self):
         return self.write({"state": "approved_by_managing_director"})
 
     def reject_request(self):
