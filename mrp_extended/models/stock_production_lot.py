@@ -2,11 +2,45 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 from odoo.osv import expression
-from odoo import models, api
+from odoo import api, fields, models, _
 
 
 class StockProductionLot(models.Model):
     _inherit = 'stock.production.lot'
+
+    def _compute_finished_product(self):
+        for rec in self:
+            rec.qty_finished_product = len(rec._get_finished_lot_ids().ids)
+
+    qty_finished_product = fields.Integer('Finished Product Quantity', compute='_compute_finished_product')
+
+    def _get_finished_lot_ids(self):
+        self.ensure_one()
+        StockProductionLot = self.env['stock.production.lot']
+        MoveLine = self.env['stock.move.line']
+        StockProductionLot |= MoveLine.search([
+                                ('product_id', '=', self.product_id.id),
+                                ('lot_id', '=', self.id),
+                                ('state', '=', 'done')
+                            ]).mapped('lot_produced_ids')
+        return StockProductionLot
+
+    def action_open_finished_product(self):
+        self.ensure_one()
+        action = {
+            'name': _('Finished Products'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'stock.production.lot',
+            'target': 'current',
+        }
+        finished_product_lot_ids = self._get_finished_lot_ids()
+        if len(finished_product_lot_ids) == 1:
+            action['res_id'] = finished_product_lot_ids[0].id
+            action['view_mode'] = 'form'
+        else:
+            action['view_mode'] = 'tree,form'
+            action['domain'] = [('id', 'in', finished_product_lot_ids.ids)]
+        return action
 
     def _get_mrp_workorder_search_domain(self):
         domain = list()

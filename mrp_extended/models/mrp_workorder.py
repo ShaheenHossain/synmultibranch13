@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from odoo.tools import float_compare, float_round
 from odoo.osv import expression
 from odoo import models, fields, api, _
+from itertools import groupby
 from odoo.exceptions import UserError, Warning
 
 
@@ -25,14 +26,26 @@ class MrpWorkorder(models.Model):
                     lambda workorder: not workorder.is_reworkorder
                 ).mapped('to_reworkorder_line_ids')
             if wo.lot_id and wo.lot_id.id in reworkorder_lines.filtered(
-                    lambda rewol: rewol.rework_state != "done"
+                    lambda rewol: rewol.rework_state == "pending"
                 ).mapped('move_line_id').mapped('lot_id').ids:
                 wo.has_rework = True
             elif reworkorder_lines.filtered(lambda rewol: wo.finished_lot_id and\
-                wo.finished_lot_id.id == rewol.lot_id.id and rewol.rework_state != "done"):
+                wo.finished_lot_id.id == rewol.lot_id.id and rewol.rework_state == "pending"):
                 wo.has_rework = True
             else:
                 wo.has_rework = False
+
+    @api.depends('rebuilt_component_ids', 'lot_id', 'finished_lot_id')
+    def _check_rebuilt(self):
+        for wo in self:
+            if wo.rebuilt_component_ids._origin.filtered(
+                lambda x: x.status == "pending" and\
+                    ((wo.lot_id and wo.lot_id == x.component_lot_id) or\
+                    (wo.finished_lot_id and wo.finished_lot_id in x.finished_lot_ids))
+                ):
+                wo.has_rebuilt = True
+            else:
+                wo.has_rebuilt = False
 
     @api.depends('finished_lot_id')
     def _get_previously_finished_steps(self):
@@ -83,6 +96,9 @@ class MrpWorkorder(models.Model):
     last_test_import_user = fields.Many2one("res.users", "Last Test Import User", readonly=True)
     orig_move_line_id = fields.Many2one('stock.move.line', string="Move Line",
         help="Technical field to track related move of rework order line.")
+    has_rebuilt = fields.Boolean(string="Rebuilt?", compute='_check_rebuilt', store=True,
+        help="Technical field to track is component is need to rebuilt or not.")
+    rebuilt_component_ids = fields.One2many('mrp.workorder.rebuilt_component', 'workorder_id', string="Rebuilt Components")
 
     @api.depends('production_id.workorder_ids')
     def _compute_is_last_unfinished_wo(self):
@@ -119,6 +135,17 @@ class MrpWorkorder(models.Model):
             domain = expression.AND([domain, user_domain])
         return super(MrpWorkorder, self).search_read(domain=domain, fields=fields, offset=offset, limit=limit, order=order)
 
+    def _fields_to_update_after_done(self):
+        return {
+            'state', 'qty_produced', 'qty_producing', 'state', 'finished_lot_id', 'current_quality_check_id'
+        }
+
+    def write(self, values):
+        fields_to_update = list(set(values.keys()).intersection(self._fields_to_update_after_done()))
+        if fields_to_update and any(workorder.state == 'done' for workorder in self):
+            return super(models.Model, self).write(values)
+        return super(MrpWorkorder, self).write(values)
+
     def _get_previously_finished_lots(self):
         self.ensure_one()
         Lots = self.env['stock.production.lot']
@@ -136,18 +163,16 @@ class MrpWorkorder(models.Model):
         reserved_lots = self.move_line_ids.filtered(
                 lambda ml: ml.product_id.id == self.component_id.id
             ).mapped('lot_id')
-
         finished_lots = self.move_line_ids.filtered(
                 lambda ml: float_compare(ml.qty_done, ml.product_uom_qty, precision_rounding=ml.product_uom_id.rounding) == 0
             ).mapped('lot_id')
-
         # get rework lines
         reworkorder_lines = self.production_id.workorder_ids.filtered(
                 lambda workorder: not workorder.is_reworkorder
             ).mapped('to_reworkorder_line_ids')
 
         to_rework_lots = reworkorder_lines.filtered(
-                lambda rewol: rewol.rework_state != "done"
+                lambda rewol: rewol.rework_state == "pending"
             ).mapped('move_line_id').mapped('lot_id')
         # ignore finished and rework lots
         Lots |= ((reserved_lots - finished_lots) - to_rework_lots)
@@ -155,6 +180,7 @@ class MrpWorkorder(models.Model):
 
     def _defaults_from_to_reworkorder_line(self):
         self.ensure_one()
+        # Ensure self has is_reworkorder: True
         to_reworkorder_line_ids = self.env['mrp.workorder.line']
         origin_wo_ids = self.env[self._name].search([
                 ('reworkorder_id', '=', self.id)
@@ -355,7 +381,7 @@ class MrpWorkorder(models.Model):
         if check_id and not auto:
             # Unlink for bypass material registration
             if check_id.test_type == "register_consumed_materials":
-                check_id.unlink()
+                check_id.sudo().unlink()
             else:
                 # Mark fail and assign finished lot to track
                 check_id.do_fail()
@@ -426,7 +452,7 @@ class MrpWorkorder(models.Model):
             line.pop('lot_id')
         return line
 
-    def record_rework_production(self):
+    def record_rework_production(self, needaction_unbuild=False):
         if not self:
             return True
 
@@ -456,15 +482,20 @@ class MrpWorkorder(models.Model):
 
         # One a piece is produced, you can launch the next work order
         # self._start_nextworkorder()
-        to_reworkorder_line_ids = self.production_id.workorder_ids.mapped('to_reworkorder_line_ids')
+        rewol_vals = dict(rework_state=needaction_unbuild and "to_unbuild" or "done")
+
+        to_reworkorder_line_ids = self._defaults_from_to_reworkorder_line()
         rewol_to_update = to_reworkorder_line_ids.filtered(lambda rewol: rewol.lot_id.id == prev_lot_id.id)
         if prev_orig_move_line_id and prev_lot_id:
-            rewol_to_update.write({
-                    'move_line_id': False,
-                    'rework_state': "done",
-                })
-        else:
-            rewol_to_update.write({'rework_state': "done",})
+            rewol_vals.update(move_line_id=False)
+        #     rewol_to_update.write({
+        #             'move_line_id': False,
+        #             'rework_state': _rework_state,
+        #         })
+        # else:
+        #     rewol_to_update.write({'rework_state': _rework_state,})
+        rewol_to_update.write(rewol_vals)
+
         # Test if the production is done
         rounding = self.production_id.product_uom_id.rounding
         # Get to rework lines length
@@ -601,8 +632,22 @@ class MrpWorkorder(models.Model):
         if self.is_reworkorder:
             self = self.with_context(reworkorder_id=self.id)
             return self.record_rework_production()
+
         res = super(MrpWorkorder, self).record_production()
+
         # check if final WO then done rework here
+        rebuilt_component_ids = self.rebuilt_component_ids.filtered(
+                lambda rc: rc.status == "pending" and\
+                    ((self.lot_id and self.lot_id == rc.component_lot_id) or\
+                    (finished_lot_id and finished_lot_id in rc.finished_lot_ids)))
+        rebuilt_component_ids.write({'status': 'done'})
+
+        # Update reworkorder line status to done
+        self.to_reworkorder_line_ids.filtered(
+                lambda rewol: ((rewol.lot_id and finished_lot_id) and rewol.lot_id.id == finished_lot_id.id) and\
+                    rewol.rework_state == "to_unbuild"
+            ).write({'rework_state': "done"})
+
         if self.is_last_unfinished_wo and self.state == "done":
             reworkorder_id = self.production_id.workorder_ids.filtered(lambda workorder: workorder.is_reworkorder)
             # check if reworkorder is not processed then update it's planned dates
@@ -610,6 +655,102 @@ class MrpWorkorder(models.Model):
                 reworkorder_id._adjust_reworkorder_dates()
                 reworkorder_id.button_finish()
         return res
+
+    def do_unbuild(self):
+        self.ensure_one()
+
+        if not self.is_reworkorder:
+            return False
+
+        prev_orig_move_line_id = self.orig_move_line_id
+        prev_lot_id = self.finished_lot_id
+        prev_qty_producing = self.qty_producing
+
+        self.record_rework_production(needaction_unbuild=True)
+
+        finished_workorderlines = self.production_id.workorder_ids.mapped("finished_workorder_line_ids").filtered(
+                lambda finished_wol: finished_wol.lot_id.id == prev_lot_id.id
+            )
+        wo_ids = finished_workorderlines.mapped('finished_workorder_id')
+
+        MoveLine = self.env['stock.move.line']
+        move_lines_to_update = MoveLine
+        workorders_with_moves = self.env[self._name]
+        move_lines = wo_ids.mapped('move_line_ids')
+
+        moves_by_workorder = lambda move_lines: groupby(move_lines, key=lambda move_line: move_line.workorder_id)
+
+        for workorder_id, move_line_ids in moves_by_workorder(move_lines.filtered(lambda ml: prev_lot_id.id in ml.lot_produced_ids.ids)):
+            workorders_with_moves |= workorder_id
+            for ml in MoveLine.concat(*move_line_ids):
+                self.env['mrp.workorder.rebuilt_component'].create({
+                    'component_lot_id': ml.lot_id and ml.lot_id.id or False,
+                    'finished_lot_ids': [(4, lot.id, None) for lot in ml.lot_produced_ids],
+                    'workorder_id': ml.workorder_id.id,
+                })
+                move_lines_to_update |= ml
+        move_lines_to_update.write({'qty_done': 0, 'lot_produced_ids': False})
+
+        for wo_without_move in (wo_ids - workorders_with_moves):
+            for wol in finished_workorderlines.filtered(lambda fwol: fwol.finished_workorder_id and fwol.finished_workorder_id.id == wo_without_move.id):
+                self.env['mrp.workorder.rebuilt_component'].create({
+                    'finished_lot_ids': [(4, wol.lot_id and wol.lot_id.id, None)],
+                    'workorder_id': wol.finished_workorder_id.id,
+                })
+
+        finished_workorderlines.unlink()
+        for wo in wo_ids:
+            wo.write({
+                'qty_produced': float_round(wo.qty_produced - prev_qty_producing, precision_rounding=wo.production_id.product_uom_id.rounding),
+                'qty_producing': 1,
+                'finished_lot_id': False,
+            })
+
+        self.finished_lot_id = False
+        wo_ids._refresh_wo_lines()
+        # for workorder in wo_ids:
+        #     workorder._apply_update_workorder_lines()
+        wo_ids._restart_workorder()
+        wo_ids._resequence_checks_for_unbuilt()
+        return True
+
+    def _resequence_checks_for_unbuilt(self):
+        # update sequence of finished checks to avoid in `_change_quality_check`
+        self.mapped('check_ids').filtered(
+                lambda check: check.quality_state != 'none'
+            ).write({'finished_product_sequence': -1.0})
+
+        # update sequence of previously created rebuilt checks
+        for wo in self:
+            self.mapped('check_ids').filtered(
+                    lambda check: check.quality_state == 'none'
+                ).write({'finished_product_sequence': wo.qty_produced})
+        # only create checks if `quality_state` is none or not available
+        wos_needs_to_create_checks = self.filtered(
+                lambda w: (w.current_quality_check_id and w.current_quality_check_id.quality_state != "none") or\
+                    (not w.current_quality_check_id)
+            )
+        wos_needs_to_create_checks._create_checks()
+
+    def _restart_workorder(self):
+        """ Restart Finished Workorder """
+        for workorder in self:
+            rounding = workorder.product_id.uom_id.rounding
+            if workorder.state == 'done' and (
+                    (workorder.operation_id.batch == 'no' and
+                     float_compare(workorder.qty_production, workorder.qty_produced, precision_rounding=rounding) <= 0) or
+                    (workorder.operation_id.batch == 'yes' and
+                     float_compare(workorder.operation_id.batch_size, workorder.qty_produced, precision_rounding=rounding) <= 0)):
+                workorder.state = 'ready'
+
+    def _get_rebuilt_candidate_lot(self):
+        Lot = self.env['stock.production.lot']
+        rebuilt_component = self.rebuilt_component_ids.filtered(
+                lambda x: self.lot_id and self.lot_id == x.component_lot_id
+            )
+        if rebuilt_component and rebuilt_component.finished_lot_ids:
+            Lot |= rebuilt_component.finished_lot_ids[0]
+        return Lot
 
     def button_start(self):
         if self.is_reworkorder and not self._defaults_from_to_reworkorder_line().filtered(
@@ -626,6 +767,12 @@ class MrpWorkorder(models.Model):
                 ('product_id', '=', self.product_id.id),
                 ('company_id', '=', self.company_id.id),
             ])
+
+        if self.has_rebuilt:
+            rebuilt_candidate_lot = self._get_rebuilt_candidate_lot()
+            if rebuilt_candidate_lot:
+                rebuilt_candidate_lot.write({'name': self.lot_id.name})
+                self.finished_lot_id = candidate_lot = rebuilt_candidate_lot
 
         # Check lot has quants available
         get_available_quantity = lambda lot: self.env['stock.quant']._get_available_quantity(
@@ -883,6 +1030,7 @@ class MrpWorkorderLine(models.Model):
     rework_result = fields.Char('Result', compute='_compute_rework_title')
     rework_state = fields.Selection([
         ('pending', "To Rework"),
+        ('to_unbuild', "To Unbuild"),
         ('done', "Done")], string="Rework Status", default="pending")
     orig_rewo_id = fields.Many2one('mrp.workorder', 'Origin Product for Re-Workorder',
         ondelete='cascade')
@@ -897,3 +1045,16 @@ class MrpWorkorderLine(models.Model):
         elif not production_id and self.orig_rewo_id:
             production_id = self.orig_rewo_id.production_id
         return production_id
+
+
+class MrpWorkorderRebuiltComponent(models.Model):
+    _name = "mrp.workorder.rebuilt_component"
+    _description = "MRP Workorder Rebuilt Component"
+
+    component_lot_id = fields.Many2one('stock.production.lot', string="Component Lot")
+    finished_lot_ids = fields.Many2many('stock.production.lot', string="Finished Lots")
+    workorder_id = fields.Many2one('mrp.workorder', string="Workorder", ondelete='cascade')
+    status = fields.Selection([
+            ('pending', "Pending"),
+            ('done', "Done"),
+        ], string="Status", default="pending")

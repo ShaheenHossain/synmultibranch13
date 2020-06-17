@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <record id="sequence_update_credit" model="ir.sequence">
+        <field name="name">Update Credit Sequence</field>
+        <field name="code">update.credit.sequence</field>
+        <field name="prefix">%(year)s/</field>
+        <field eval="1" name="number_next"/>
+        <field eval="1" name="number_increment"/>
+        <field eval="False" name="company_id"/>
+        <field name="padding">4</field>
+    </record>
+</odoo>

@@ -1,3 +1,7 @@
+1.3
+=======
+- [Add] Unbuild product flow during the manufacturing process
+
 1.2
 =======
 - Limit the workorders as per MRP Users

@@ -3,3 +3,4 @@
 
 from . import mrp_workorder_import_xls_result
 from . import mrp_workorder_rework_confirmation
+from . import mrp_workorder_unbuild_confirmation

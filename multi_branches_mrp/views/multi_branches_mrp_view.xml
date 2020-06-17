@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_mrp_bom_form" model="ir.ui.view">
+        <field name="name">mrp.bom.branch.form</field>
+        <field name="model">mrp.bom</field>
+        <field name="inherit_id" ref="mrp.mrp_bom_form_view"/>
+        <field name="arch" type="xml">
+            <field name="company_id" position="after">
+                <field name="branch_id" groups="multi_branches.group_multi_branch" options="{'no_create': True}"/>
+            </field>
+            <xpath expr="//notebook/page/field[@name='bom_line_ids']/tree/field[@name='product_id']" position="after">
+                <field name="branch_id" groups="multi_branches.group_multi_branch" options="{'no_create': True}"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_mrp_production_form" model="ir.ui.view">
+        <field name="name">mrp.production.branch.form</field>
+        <field name="model">mrp.production</field>
+        <field name="inherit_id" ref="mrp.mrp_production_form_view" />
+        <field name="arch" type="xml">
+            <field name="company_id" position="after">
+                <field name="branch_id" groups="multi_branches.group_multi_branch" options="{'no_create': True}" attrs="{'readonly': [('state', '!=', 'draft')]}" force_save="1"/>
+            </field>
+            <xpath expr="//notebook/page/field[@name='finished_move_line_ids']/tree/field[@name='product_id']" position="after">
+                <field name="branch_id" groups="multi_branches.group_multi_branch" options="{'no_create': True}"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_mrp_production_filter_branch" model="ir.ui.view">
+        <field name="name">mrp.production.branch.select</field>
+        <field name="model">mrp.production</field>
+        <field name="inherit_id" ref="mrp.view_mrp_production_filter" />
+        <field name="arch" type="xml">
+            <filter name="product" position="after">
+                <filter string="Branch" name="branch" context="{'group_by': 'branch_id'}"/>
+            </filter>
+        </field>
+    </record>
+
+    <record id="view_stock_move_raw_tree_inherit" model="ir.ui.view">
+        <field name="name">stock.move.raw.tree.branch</field>
+        <field name="model">stock.move</field>
+        <field name="inherit_id" ref="mrp.view_stock_move_raw_tree"/>
+        <field name="arch" type="xml">
+            <field name="product_id" position="after">
+                <field name="branch_id" groups="multi_branches.group_multi_branch" options="{'no_create': True}"/>
+            </field>
+        </field>
+    </record>
+
+    <record id="view_stock_picking_type_inherit" model="ir.ui.view">
+        <field name="name">stock.picking.type.branch</field>
+        <field name="model">stock.picking.type</field>
+        <field name="inherit_id" ref="stock.view_picking_type_form"/>
+        <field name="arch" type="xml">
+            <field name="company_id" position="after">
+                <field name="branch_id" groups="multi_branches.group_multi_branch" options="{'no_create': True}"/>
+            </field>
+        </field>
+    </record>
+
+    <record id="view_mrp_workorder_form" model="ir.ui.view">
+        <field name="name">mrp.workorder.branch.form</field>
+        <field name="model">mrp.workorder</field>
+        <field name="inherit_id" ref="mrp.mrp_production_workorder_form_view_inherit" />
+        <field name="arch" type="xml">
+            <field name="product_id" position="after">
+                <field name="branch_id" groups="multi_branches.group_multi_branch" options="{'no_create': True}" readonly="1"/>
+            </field>
+        </field>
+    </record>
+
+    <record id="view_mrp_production_workorder_form_view_filter_branch" model="ir.ui.view">
+        <field name="name">mrp.workorder.branch.select</field>
+        <field name="model">mrp.workorder</field>
+        <field name="inherit_id" ref="mrp.view_mrp_production_workorder_form_view_filter" />
+        <field name="arch" type="xml">
+            <filter name="work_center" position="after">
+                <filter string="Branch" name="branch" context="{'group_by': 'branch_id'}"/>
+            </filter>
+        </field>
+    </record>
+</odoo>

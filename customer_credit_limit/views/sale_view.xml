@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <record id="view_sale_credit_limit_form" model="ir.ui.view">
+        <field name="name">sale.order.credit.limit.inherit</field>
+        <field name="model">sale.order</field>
+        <field name="priority">3</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <button name="action_cancel" position="after">
+                <field name="exceed_both_amount_and_time" invisible="1"/>
+                <button name="credit_limit_exceed_request" string="Request Exceed Credit Limit" type="object" class="btn-primary" groups="sales_team.group_sale_salesman" attrs="{'invisible': ['|', ('exceed_both_amount_and_time', '=', True), ('state', '!=', 'hold')]}"/>
+                <button name="request_managing_director" string="Request Managing Director Exceed Credit Limit" type="object" class="btn-primary" groups="sales_team.group_sale_salesman" attrs="{'invisible': ['|', ('exceed_both_amount_and_time', '!=', True), ('state', '!=', 'hold')]}"/>
+                <button name="approve_sale_manager" string="Approval from the sales manager" type="object" class="btn-primary" states="sent_for_sales_approval" groups="sales_team.group_sale_manager"/>
+                <button name="request_account_approval" string="Request For Account Manager Approval" type="object" class="btn-primary" states="approved_by_sales_manager" groups="sales_team.group_sale_manager"/>
+                <button name="approve_account_manager" string="Approval from Account manager" type="object" class="btn-primary" states="sent_for_accounts_approval" groups="account.group_account_manager"/>
+                <button name="approve_ceo" string="Approval from CEO" type="object" class="btn-primary" states="sent_for_sales_approval,sent_for_accounts_approval" groups="customer_credit_limit.group_ceo"/>
+                <button name="reject_request" string="Reject" type="object" class="btn-primary" states="sent_for_sales_approval,approved_by_sales_manager,sent_for_accounts_approval,approved_by_accounts_manager" groups="sales_team.group_sale_manager,account.group_account_manager"/>
+            </button>
+            <button name="action_confirm" position="attributes">
+                <attribute name="attrs">{'invisible': [('state', 'not in', ['sent', 'approved_by_accounts_manager', 'approved_by_managing_director'])]}</attribute>
+            </button>
+        </field>
+    </record>
+</odoo>
