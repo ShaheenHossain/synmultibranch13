@@ -9,7 +9,7 @@ class ResPartner(models.Model):
 
     credit_limit = fields.Float("Credit Limit", help="Credit Limit to manage customer outstanding debts.")
     name_on_board = fields.Char("Name On Board", help="Name on board for customer.")
-    is_distributor = fields.Boolean("Destributor")
+    is_distributor = fields.Boolean("Distributor")
     cr_no = fields.Char("CR", help="CR Number")
     cr_issue_date = fields.Date("Issue Date", help="CR Issue Date")
     cr_expiry_date = fields.Date("Expiry Date", help="CR Expiry Date")

@@ -14,7 +14,7 @@ class Sale(models.Model):
                                             ('approved_by_sales_manager', 'Approved By Sales Manager'),
                                             ('sent_for_accounts_approval', 'Sent For Account Manager Approval'),
                                             ('approved_by_accounts_manager', 'Approved By Accounts Manager'),
-                                            ('approved_by_managing_director', 'Approved By Managing Directpr'),
+                                            ('approved_by_managing_director', 'Approved By Managing Director'),
                                             ('request_rejected', 'Request Rejected'),
                                             ])
 
@@ -106,7 +106,7 @@ class Sale(models.Model):
 
     def approve_sale_manager(self):
         credit_limit_exceeded, credit_duration_exceeded = self.check_credit_limit_exceeded()
-        if credit_duration_exceeded and credit_limit_exceeded and not self.env.user.has_group("group_managing_director"):
+        if credit_duration_exceeded and credit_limit_exceeded and not self.env.user.has_group("customer_credit_limit.group_ceo"):
             raise Warning(_("You can not approve request when customer exceed credit limit and credit duration both."))
         return self.write({"state": "approved_by_sales_manager"})
 
@@ -115,9 +115,9 @@ class Sale(models.Model):
 
     def approve_account_manager(self):
         credit_limit_exceeded, credit_duration_exceeded = self.check_credit_limit_exceeded()
-        if credit_duration_exceeded and credit_limit_exceeded and not self.env.user.has_group("group_managing_director"):
+        if credit_duration_exceeded and credit_limit_exceeded and not self.env.user.has_group("customer_credit_limit.group_ceo"):
             raise Warning(_("You can not approve request when customer exceed credit limit and credit duration both."))
-        return self.write({"state": "approved_by_account_manager"})
+        return self.write({"state": "approved_by_accounts_manager"})
 
     def approve_ceo(self):
         return self.write({"state": "approved_by_managing_director"})
