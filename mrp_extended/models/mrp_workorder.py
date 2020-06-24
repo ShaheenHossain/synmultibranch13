@@ -137,7 +137,7 @@ class MrpWorkorder(models.Model):
 
     def _fields_to_update_after_done(self):
         return {
-            'state', 'qty_produced', 'qty_producing', 'state', 'finished_lot_id', 'current_quality_check_id'
+            'state', 'qty_produced', 'qty_producing', 'finished_lot_id', 'current_quality_check_id'
         }
 
     def write(self, values):
@@ -387,6 +387,7 @@ class MrpWorkorder(models.Model):
                 check_id.do_fail()
                 if self.finished_lot_id:
                     check_id.write({
+                        'finished_product_sequence': -1,
                         'finished_lot_id': self.finished_lot_id.id
                     })
 
@@ -416,6 +417,7 @@ class MrpWorkorder(models.Model):
             # Check if you can attribute the lot to the checks
             if (self.production_id.product_id.tracking != 'none') and self.finished_lot_id:
                 self.check_ids.filtered(lambda check: not check.finished_lot_id).write({
+                    'finished_product_sequence': -1,
                     'finished_lot_id': self.finished_lot_id.id
                 })
         # Do Rework

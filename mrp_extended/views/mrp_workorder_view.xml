@@ -96,7 +96,7 @@
             </xpath>
             <button name="action_next" position="before">
                 <button name="%(mrp_extended.mrp_workorder_import_xls_result_action)d" type="action" icon="fa-file-excel-o" class="btn-success" attrs="{'invisible': ['|', '|', '|', '|', ('test_type', '!=', 'passfail'), ('product_tracking', '!=', 'serial'), ('has_rework', '!=', False), ('is_reworkorder', '=', True), ('state', 'in', ('cancel', 'done'))]}" help="Import test result excel sheet."/>
-                <button name="%(mrp_extended.mrp_workorder_rework_confirmation_action)d" type="action" string="Send to Rework" icon="fa-repeat" class="btn-primary" attrs="{'invisible': ['|', '|', '|', ('product_tracking', '!=', 'serial'), ('has_rework', '!=', False), ('is_reworkorder', '!=', False), ('state', 'in', ('cancel', 'done'))]}"/><!-- barcode_trigger="cloWO"-->
+                <button name="%(mrp_extended.mrp_workorder_rework_confirmation_action)d" type="action" string="Send to Rework" icon="fa-repeat" class="btn-primary" attrs="{'invisible': ['|', '|', '|', '|', ('is_first_step', '=', False), ('product_tracking', '!=', 'serial'), ('has_rework', '!=', False), ('is_reworkorder', '!=', False), ('state', 'in', ('cancel', 'done'))]}"/><!-- barcode_trigger="cloWO"-->
             </button>
             <button name="record_production" position="attributes">
                 <attribute name="string">Validate</attribute>
