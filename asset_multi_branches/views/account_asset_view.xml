@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+     <record model="ir.ui.view" id="branch_view_account_asset_form_inherit">
+        <field name="name">account.asset.form.inherit</field>
+        <field name="model">account.asset</field>
+        <field name="inherit_id" ref="account_asset.view_account_asset_form"/>
+        <field name="arch" type="xml">
+            <field name="company_id" position="after">
+                <field name="branch_id" groups="multi_branches.group_multi_branch" context="{'company_id': company_id}" attrs="{'readonly': [('state', 'not in', ['draft'])]}"/>
+            </field>
+            <xpath expr="//field[@name='original_move_line_ids']/tree/field[@name='date']" position="after">
+                <field name="branch_id" groups="multi_branches.group_multi_branch"/>
+            </xpath>
+            <xpath expr="//field[@name='depreciation_move_ids']/tree/field[@name='ref']" position="after">
+                <field name="company_id" invisible="1"/>
+                <field name="branch_id" groups="multi_branches.group_multi_branch" context="{'company_id': company_id}"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
